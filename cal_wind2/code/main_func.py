@@ -155,23 +155,28 @@ def nearestInd(items, pivot):
 
     return min(range(len(items)), key=lambda i: abs(items[i] - pivot))
 
-def timeRescale(dat,tdiff,units='m'):
-    """Calculated indeces for rescaling time for regular sampling interevals. No interpolation is used, only extracting the nearest values in time.
+def timeRescale(dat,tdiff,units='min'):
+    """
+    Subset dataframe to reflect desired regular sampling interval. Nearest time values are used, `dat` must have datetime column 'DT'
 
     Args:
 
         dat:            pandas dataframe with datetime column correctly formatted
         tdiff:          desired regular sampling interval
-        units:          units of desired sampling intervals using NumPy timedelta64 conventions. Defaults to 'm'.
+        units:          units of desired sampling intervals using NumPy timedelta64 conventions. Defaults to 'min'.
 
     Returns:
         Pandas dataframe resampled to desired regular sampling interval
     """
 
-    return dat.iloc[np.arange(0,len(dat),step=np.timedelta64(tdiff,units)/np.timedelta64(mode(np.diff(dat['DT'])),'s')).astype(int),:]
+    # change indexing to datetime and resample
+    out = dat.set_index('DT', drop = False).resample(str(tdiff) + units).nearest().dropna()
+    # return resampled data with original times and standard indexing
+    return out.set_index(pd.Index(range(len(out))))
 
 def angles(longitudes,latitudes):
-    """Angular differences between subsequent in latitude and longitude arrays
+    """
+    Angular differences between subsequent in latitude and longitude arrays
 
     Args:
 
@@ -214,11 +219,7 @@ def gps_speed(longitudes, latitudes, timestamps):
  
     Example:                                                                                                            
         >>> df['gpsSpeed'] = gps_speed(df.longitude, df.latitude, df.recordedAt)
-    """                                                                                                                 
- 
-    assert longitudes.shape[0] > 1                                                                                      
-    assert latitudes.shape[0] > 1                                                                                       
-    assert timestamps.shape[0] > 1                                                                                      
+    """
  
     lon1 = longitudes[:-1].reset_index(drop = True)                                                                                       
     lat1 = latitudes[:-1].reset_index(drop = True)                                                                                 
