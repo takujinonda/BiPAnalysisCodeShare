@@ -1,5 +1,6 @@
 import cmath
 import math
+import re
 from functools import partial
 from statistics import mode
 
@@ -88,8 +89,9 @@ def Von_Mises_sd(kappa):
 
     return 1/np.sqrt(kappa)
 
-def readAxyGPS(filename, delim = "\t", cols = [0,1,2,3], colnames = ['Date', 'Time', 'lat', 'lon'], dtFormat = "%d/%m/%Y %H:%M:%S"): 
-    """Read in AxyTrek GPS data (txt files) as output by X Manager
+def readAxyGPS(filename, delim = "\t", cols = [0,1,2,3], colnames = ['Date', 'Time', 'lat', 'lon'], datetimeFormat = "%d/%m/%Y %H:%M:%S"): 
+    """
+    Read in AxyTrek GPS data (txt files) as output by X Manager
 
     Args:
 
@@ -102,11 +104,13 @@ def readAxyGPS(filename, delim = "\t", cols = [0,1,2,3], colnames = ['Date', 'Ti
     """
     df = pd.read_csv(filename, sep = delim, usecols = cols,
     names = colnames)
-    df['DT'] = pd.to_datetime(df['Date'] + " " + df['Time'], format = dtFormat)
+    df.DT = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
+    df['DT'] = pd.to_datetime(df['Date'] + " " + df['Time'], format = datetimeFormat)
     return df
 
 def readBIPAxy(filename):
-    """Read in AxyTrek data as formatted by the BIP system
+    """
+    Read in AxyTrek data as formatted by the BIP system
 
     Args:
 
@@ -116,8 +120,10 @@ def readBIPAxy(filename):
         Pandas dataframe of all columns from the BIP system (datetime 'DT', latitude 'lat', and longitude 'lon'). A formatted DateTime column (named DT) is generated)
     """
     
-    df = pd.read_csv(filename, sep = ",", header = 0, usecols = [0,1,2], names = ['DT','lat','lon']).dropna().reset_index()
-    df['DT'] = pd.to_datetime(df['DT'].str[0:-6], format = "%Y-%m-%d %H:%M:%S")
+    df = pd.read_csv(filename, sep = ",", header = 0).dropna().reset_index()
+    df = df[['time','latitude','longitude']].rename(columns={'time':'DT','latitude':'lat','longitude':'lon'})
+    df.DT = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
+    df['DT'] = pd.to_datetime(df['DT'], format = "%Y-%m-%d %H:%M:%S.%f")
     return df
 
 def nearest(items, pivot):
@@ -155,15 +161,14 @@ def nearestInd(items, pivot):
 
     return min(range(len(items)), key=lambda i: abs(items[i] - pivot))
 
-def timeRescale(dat,tdiff,units='min'):
-    """
+def timeRescale(dat,tdiff,units='m'):
+    """    
     Subset dataframe to reflect desired regular sampling interval. Nearest time values are used, `dat` must have datetime column 'DT'
-
     Args:
 
-        dat:            pandas dataframe with datetime column correctly formatted
+        dat:            pandas dataframe with datetime column'DT'  correctly formatted
         tdiff:          desired regular sampling interval
-        units:          units of desired sampling intervals using NumPy timedelta64 conventions. Defaults to 'min'.
+        units:          units of desired sampling intervals using pandas time/date conventions. Defaults to 'T'.
 
     Returns:
         Pandas dataframe resampled to desired regular sampling interval
@@ -240,6 +245,26 @@ def gps_speed(longitudes, latitudes, timestamps):
     speed = np.insert(speed, 0, np.nan, axis=0)
     dist = np.insert(dist, 0, np.nan, axis=0)                                                                         
     return dist,speed
+
+def dtFormat(x):
+    """
+    Format incoming datetimes from BiP system. Typically datetimes are brought in the format YYYY-mm-dd HH:MM:SS+00:00, however, SS can contain decimal values or not. This function returns the same datetime in string format with a decimal place added if none is originally present and removes '+00:' from the string so that datetimes can be converted to datetime format in Pandas.
+
+    Args:
+    
+        x:  datetime in string format
+
+    Returns:
+        String of x in correct datetime foramt %Y-%m-%d %H:%M:%S.%f
+    """
+    # first, test if decimal place already present
+    if bool(re.search('[.]',x)):
+        x = re.sub('[+]','',x)
+    else:
+        x = re.sub('[+]','.',x)
+    x = re.sub(':00$','',x)
+
+    return x
 
 def prePare(filename, convertToMin: bool = True, tdiff = 1, units = 'm', isBip: bool = True):
     """Prepare AxyTrek GPS data as per required for Goto original method. DateTime, distance, track speed and direction is added
@@ -560,7 +585,10 @@ def windEstimation(file, cutv: float = 4.1667, cv = 34.7/3.6, windowLength: int 
     dat = prePare(file, convertToMin = rescaleTime, isBip = isBp)
 
     # generate windows over which estimation method will be run
-    windows,centers = findWindows(dat,cutv,windowLength)
+    try:
+        windows,centers = findWindows(dat,cutv,windowLength)
+    except:
+        return
 
     # max likelihood calculations for wind estimation
     for win in range(len(windows)):
@@ -614,21 +642,20 @@ def Circmean(angles, deg=True):
     return round(np.rad2deg(mean) if deg else mean, 7)
 
 # for BiP batch
-def prePare2(df, convertToMin: bool = True, tdiff = 1, units = 'm', isBip: bool = True):
+def prePare2(df, convertToMin: bool = True, tdiff = 1, units = 'min', isBip: bool = True):
     """Prepare AxyTrek GPS data as per required for Goto original method. DateTime, distance, track speed and direction is added
 
     Args:
         filename:       full path for file to be read in
         convertToMin:   boolean for whether data should be resampled to regular time intervals
         tdiff:          resample time interval. Defaults to 1
-        units:          resample time interval unit. Defaults to 'm'
+        units:          resample time interval unit. Defaults to 'min'
         isBip:          boolean stating whether data is in BiP format
 
     Returns:
         Pandas dataframe of read in data. Adds columns 'dt' (elapsed time from fix to previous time point in seconds), 'dist' (distance travelled from previous point in m), 'track_speed' (in m/sec), 'track_direction' (direction between consecutive GPS positions in rad)
     """
 
-    df['DT'] = pd.to_datetime(df['DT'].str[0:-6], format = "%Y-%m-%d %H:%M:%S")
     if convertToMin:
         df = timeRescale(df, tdiff, units)
     
@@ -692,14 +719,15 @@ def main_func(df):
     df = df.reset_index()
     df = df.drop(['index'], axis=1)
     df.rename(columns={'time': 'DT', 'latitude': 'lat', 'longitude': 'lon'}, inplace=True)
-    df['DT'] = df['DT'].apply(lambda x: x.strftime("%Y-%m-%d %H:%M:%S.%f")) #一旦、+00:00を除くために文字列にする
+    df['DT'] = [dtFormat(str(x)) for x in df['DT']]
+    df['DT'] = pd.to_datetime(df['DT'],format="%Y-%m-%d %H:%M:%S.%f") #一旦、+00:00を除くために文字列にする
     
     if len(df) >0:
         out = windEstimation2(df, isBp = True)
         out = out.rename(columns={"Time":"time", "Lat":"latitude", "Lon":"longitude"})
         
         #すでにUTCなので不要
-        out['time'] = pd.to_datetime(out['time'], format='%Y-%m-%d %H:%M:%S', errors='coerce').dt.tz_localize('UTC')
+        out['time'] = pd.to_datetime(out['time'], format='%Y-%m-%d %H:%M:%S.%f', errors='coerce').dt.tz_localize('UTC')
 
         return out
     else:
