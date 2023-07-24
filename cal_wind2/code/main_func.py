@@ -161,7 +161,7 @@ def nearestInd(items, pivot):
 
     return min(range(len(items)), key=lambda i: abs(items[i] - pivot))
 
-def timeRescale(dat,tdiff,units='m'):
+def timeRescale(dat,tdiff,units='min'):
     """    
     Subset dataframe to reflect desired regular sampling interval. Nearest time values are used, `dat` must have datetime column 'DT'
     Args:
@@ -266,14 +266,14 @@ def dtFormat(x):
 
     return x
 
-def prePare(filename, convertToMin: bool = True, tdiff = 1, units = 'm', isBip: bool = True):
+def prePare(filename, convertToMin: bool = True, tdiff = 1, units = 'min', isBip: bool = True):
     """Prepare AxyTrek GPS data as per required for Goto original method. DateTime, distance, track speed and direction is added
 
     Args:
         filename:       full path for file to be read in
         convertToMin:   boolean for whether data should be resampled to regular time intervals
         tdiff:          resample time interval. Defaults to 1
-        units:          resample time interval unit. Defaults to 'm'
+        units:          resample time interval unit. Defaults to 'min'
         isBip:          boolean stating whether data is in BiP format
 
     Returns:
