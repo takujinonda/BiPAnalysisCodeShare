@@ -193,91 +193,75 @@ def main_func(df):
     else:
         return pd.DataFrame(columns=['Time','Lat','Lon','MeanHead','X','Y'])
 
-dat = readBIP("https://bipsharedata.s3.ap-northeast-1.amazonaws.com/analysis/cal_wind2/Axy/3a66a690-5d53-4bed-a4a7-4d25a1569c4d/3a66a690-5d53-4bed-a4a7-4d25a1569c4d_std.csv",cols='acc')
+# dat = readBIP("https://bipsharedata.s3.ap-northeast-1.amazonaws.com/analysis/cal_wind2/Axy/3a66a690-5d53-4bed-a4a7-4d25a1569c4d/3a66a690-5d53-4bed-a4a7-4d25a1569c4d_std.csv",cols='acc')
 
-tst = dat.iloc[0:1610000,].reset_index()
-tstGPS = tst.dropna()
+# # gps only data
+# gpsDat = dat.dropna()
+# tst = dat.iloc[0:1610000,].reset_index()
+# tstGPS = tst.dropna()
 
-(110000-20000)/(25*60)
-
-# remove positions near capture site
-FkOshima = [39.400,141.998] # capture site
-test = np.array(gps_distanceSingle(dat.lon.dropna(),dat.lat.dropna(),FkOshima[0],FkOshima[1]))
-sum(test<1500)
-
-test < 15
-test[-1]
+# (110000-20000)/(25*60)
 
 
+# # remove positions near capture site
+# FkOshima = [39.400,141.998] # capture site
+# test = np.array(gps_distanceSingle(dat.lon.dropna(),dat.lat.dropna(),FkOshima[0],FkOshima[1]))
+# sum(test<1500)
 
-np.where(test < 1500)[0][-1]
-import matplotlib.pyplot as plt
+# test < 15
+# test[-1]
 
-plt.scatter(dat.lat.dropna(),dat.lon.dropna())
-plt.scatter(dat.lat.dropna()[test < 5],dat.lon.dropna()[test < 5],color='red')
-plt.show()
-# find GPS sampling rate
-np.timedelta64(stats.mode(np.diff(tst.DT.dropna()))[0][0],'ms')
-
-sum(test < 1.5)
-
-rem = []
-for x in np.where(test < 1.5)[0]:
-    rem.extend(np.arange(np.max([0,x-int((60/gpsFS * fs)/2)]),np.min([len(dat),x+int((60/gpsFS * fs)/2)])))
-rem = np.array(rem)
-
-dat.drop(rem)
-
-b = np.where(test < 1.5)[0][0]
-np.arange(np.max([0,b-int((60/gpsFS * fs)/2)]),np.min([len(dat),b+int((60/gpsFS * fs)/2)]))
-
-tst.dropna()
-
-# acceleration sample rate (Hz)
-fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(dat.DT))[0][0])
-
-# GPS sample rate (fixes per minute)
-gpsFS = int(np.timedelta64(1,'m') / stats.mode(np.diff(dat.dropna()['DT']))[0][0])
+# dat.index[np.where(test < 1.5)[0]]
 
 
-test[test != np.nan]
 
-test[0] == nan
+# np.where(test < 1500)[0][-1]
+# import matplotlib.pyplot as plt
 
-len(np.where(test < 1500)[0])
+# plt.scatter(dat.lat.dropna(),dat.lon.dropna())
+# plt.scatter(dat.lat.dropna()[test < 5],dat.lon.dropna()[test < 5],color='red')
+# plt.show()
+# # find GPS sampling rate
+# np.timedelta64(stats.mode(np.diff(tst.DT.dropna()))[0][0],'ms')
 
-len(tst.dropna())
+# sum(test < 1.5)
+
+# rem = []
+# for x in np.where(test < 1.5)[0]:
+#     rem.extend(np.arange(np.max([0,x-int((60/gpsFS * fs)/2)]),np.min([len(dat),x+int((60/gpsFS * fs)/2)])))
+# rem = np.array(rem)
+
+# dat.drop(rem)
+
+# b = np.where(test < 1.5)[0][0]
+# np.arange(np.max([0,b-int((60/gpsFS * fs)/2)]),np.min([len(dat),b+int((60/gpsFS * fs)/2)]))
+
+# tst.dropna()
+
+# # acceleration sample rate (Hz)
+# fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(dat.DT))[0][0])
+
+# # GPS sample rate (fixes per minute)
+# gpsFS = int(np.timedelta64(1,'m') / stats.mode(np.diff(dat.dropna()['DT']))[0][0])
 
 
 
 
-1/(np.timedelta64(1,'s')/stats.mode(np.diff(dat.dropna().DT))[0][0])
-
-gpsMode = stats.mode()
-lats = 
-lons = dat.lon.dropna()
 
 
-for x in np.where(test < 1500)[0]:
-    tst.drop(range(np.max([0,x-12]),np.min([x+12,len(tst)-1])), inplace = True)
+# rem = rem[rem[0] < len(tst)]
 
-tst.drop(range(90000,95000), axis=0)
+# rem > list(len(tst))
 
+# type(rem)
 
-
-rem = rem[rem[0] < len(tst)]
-
-rem > list(len(tst))
-
-type(rem)
-
-type(len(tst))
+# type(len(tst))
 
 
-rem < len(tst)
+# rem < len(tst)
 
-tst.drop(rem,axis=1)
+# tst.drop(rem,axis=1)
 
-np.max(rem)
+# np.max(rem)
 
-[distance.distance((x,y),FkOshima).m for x,y in zip(tstGPS.lat,tstGPS.lon)]
+# [distance.distance((x,y),FkOshima).m for x,y in zip(tstGPS.lat,tstGPS.lon)]
