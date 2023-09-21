@@ -206,10 +206,10 @@ def removeNearCS(data, captureSite, distThreshold = 1.5):
         Pandas dataframe of similar format as data with all points located within distThreshold of captureSite removed.
     """
     # highest data sample rate (Hz)
-    fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(data.DT))[0][0])
+    fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(data.DT),keepdims=False)[0])
 
     # GPS sample rate (fixes per minute)
-    gpsFS = 60/int(np.timedelta64(1,'m') / stats.mode(np.diff(data.dropna()['DT']))[0][0])
+    gpsFS = 60/int(np.timedelta64(1,'m') / stats.mode(np.diff(data.dropna()['DT']),keepdims=False)[0])
 
     # find distances from capture site
     capSiteDist = np.array(gps_distanceSingle(data.lon.dropna(),data.lat.dropna(),captureSite[0],captureSite[1]))
@@ -324,4 +324,5 @@ test = removeNearCS(dat,[39.400,141.998], 5)
 test = []
 
 [np.arange(randint(0,9),randint(10,19)) for n in range(20)]
+
 
