@@ -141,15 +141,15 @@ def gps_speed(longitudes, latitudes, timestamps):
     the earth (specified in decimal degrees). All args must be of equal length.                                         
  
     Args:                                                                                                               
-        longitudes: pandas series of longitudes                                                                         
-        latitudes:  pandas series of latitudes                                                                          
-        timestamps: pandas series of timestamps                                                                         
+        longitudes: pandas series of longitudes.                                                                         
+        latitudes:  pandas series of latitudes.                                                                          
+        timestamps: pandas series of timestamps.                                                                         
  
     Returns:                                                                                                            
         Speed is returned an array in m/s.                                                                             
  
     Example:                                                                                                            
-        >>> df['gpsSpeed'] = gps_speed(df.longitude, df.latitude, df.recordedAt)
+        >>> df['gpsSpeed'] = gps_speed(df.longitude, df.latitude, df.recordedAt).
     """
  
     lon1 = longitudes[:-1].reset_index(drop = True)                                                                                       
@@ -193,75 +193,135 @@ def main_func(df):
     else:
         return pd.DataFrame(columns=['Time','Lat','Lon','MeanHead','X','Y'])
 
-# dat = readBIP("https://bipsharedata.s3.ap-northeast-1.amazonaws.com/analysis/cal_wind2/Axy/3a66a690-5d53-4bed-a4a7-4d25a1569c4d/3a66a690-5d53-4bed-a4a7-4d25a1569c4d_std.csv",cols='acc')
+def removeNearCS(data, captureSite, distThreshold = 1.5):
+    """
+    Remove acceleration and GPS data captured within a set distance of the capture site.
 
-# # gps only data
-# gpsDat = dat.dropna()
-# tst = dat.iloc[0:1610000,].reset_index()
-# tstGPS = tst.dropna()
+    Args:
+        data:           pandas dataframe of tag data as formatted by readBIP. Expected columns are DT (datetime, formatted), lat (latitude in decimal degrees), and lon (longitude in decimal degrees).
+        captureSite:    capture site latitude and longitude in decimal degrees.
+        distThreshold:  desired distance threshold from capture site in km. Defaults to 1.5.
 
-# (110000-20000)/(25*60)
+    Returns:
+        Pandas dataframe of similar format as data with all points located within distThreshold of captureSite removed.
+    """
+    # highest data sample rate (Hz)
+    fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(data.DT))[0][0])
 
+    # GPS sample rate (fixes per minute)
+    gpsFS = 60/int(np.timedelta64(1,'m') / stats.mode(np.diff(data.dropna()['DT']))[0][0])
 
-# # remove positions near capture site
-# FkOshima = [39.400,141.998] # capture site
-# test = np.array(gps_distanceSingle(dat.lon.dropna(),dat.lat.dropna(),FkOshima[0],FkOshima[1]))
-# sum(test<1500)
+    # find distances from capture site
+    capSiteDist = np.array(gps_distanceSingle(data.lon.dropna(),data.lat.dropna(),captureSite[0],captureSite[1]))
 
-# test < 15
-# test[-1]
+    inds = data.lat.dropna().index[np.where(capSiteDist < distThreshold)[0]] # find indeces to be removed from original dataset
 
-# dat.index[np.where(test < 1.5)[0]]
+    # if any difference in GPS and acc sampling rates means we must extend GPS indeces
+    samplerDiff = int(np.floor(fs * gpsFS / 2)) # number of fs samples either side of GPS position
 
+    # create ranges to be removed
+    rem = []
+    for x in inds:
+        rem.extend(np.arange(x - samplerDiff, x + samplerDiff))
+    rem = np.array(rem)
 
+    return data.drop(rem)
 
-# np.where(test < 1500)[0][-1]
-# import matplotlib.pyplot as plt
+def passFilt(sig, passband, stopband, fs):
+    """
+    Generate and apply passband equiripple filter (equivalent to MATLAB default passband filter).
 
-# plt.scatter(dat.lat.dropna(),dat.lon.dropna())
-# plt.scatter(dat.lat.dropna()[test < 5],dat.lon.dropna()[test < 5],color='red')
-# plt.show()
-# # find GPS sampling rate
-# np.timedelta64(stats.mode(np.diff(tst.DT.dropna()))[0][0],'ms')
+    Args:
+        sig:        signal to apply filter to.
+        passband:   passband (Hz).
+        stopband:   stopband (Hz).
+        fs:         sig sampling frequency (Hz).
 
-# sum(test < 1.5)
-
-# rem = []
-# for x in np.where(test < 1.5)[0]:
-#     rem.extend(np.arange(np.max([0,x-int((60/gpsFS * fs)/2)]),np.min([len(dat),x+int((60/gpsFS * fs)/2)])))
-# rem = np.array(rem)
-
-# dat.drop(rem)
-
-# b = np.where(test < 1.5)[0][0]
-# np.arange(np.max([0,b-int((60/gpsFS * fs)/2)]),np.min([len(dat),b+int((60/gpsFS * fs)/2)]))
-
-# tst.dropna()
-
-# # acceleration sample rate (Hz)
-# fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(dat.DT))[0][0])
-
-# # GPS sample rate (fixes per minute)
-# gpsFS = int(np.timedelta64(1,'m') / stats.mode(np.diff(dat.dropna()['DT']))[0][0])
-
-
-
-
+    Returns:
+        Filtered signal as array of same length sig.
+    """
+    eqFil=signal.remez(101,[0,passband,stopband,fs*.5],[1,0],fs=fs) # generate equiripple filter
+    eqFil=signal.remez(101,[0,1.5,2,fs*.5],[1,0],fs=fs)
+    ptSig = signal.filtfilt(b=eqFil,a=1,x=sig);
+    
+    return ptSig
 
 
-# rem = rem[rem[0] < len(tst)]
+# create static and dynamic (1 pass, 1.5 stop), pitch, roll, ODBA
 
-# rem > list(len(tst))
+def hammingSpect(sig,fs=25):
+    """
+    Generate spectrogram data of sig using a Hamming window of 4 seconds with 85% overlap.
+    
+    Args:
+        sig:    signal to generate spectrogram.
+        fs:     sig sampling frequency (Hz). Defaults to 25.
+        
+    """
+    # generate spectrogram (4 second window, overlap of 85%, hamming window)
 
-# type(rem)
+    #set window size of 4 seconds
+    winsize = fs*4
+    #set overlap between windows (will determine the temporal resolution
+    numoverlap = round(.9875*winsize); #(85%)
+    win = signal.windows.hamming(winsize);
 
-# type(len(tst))
+    f, t, Sxx = signal.spectrogram(DZ,fs,window=win,noverlap=numoverlap)
+
+    return f, t, Sxx
+
+def rollingSpecSum(spec,f,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
+    """
+    Create a rolling sum of the difference between spectrogram intensities from minFreq to maxFreq and intensities above maxFreq, , i.e. summed values between 3 and 5 Hz - summed values above 5 Hz.
+    
+    Args:
+        spec:       spectrogram object.
+        f:          array of sample frequencies.
+        minFreq:    minimum frequency for sum (Hz).
+        maxFreq:    maximum frequency for sum (Hz).
+        fs:         spectrogram sampling frequency (Hz). Defaults to 25.
+        dur:        rolling sum duration (s).
+        inclusive:  should boundaries be included. Defaults to False.
+
+    Returns:
+        Summed frequency intensities across spec object.
+    """
+    if inclusive:
+        spectDiff = np.sum(spec[(f >= minFreq) & (f <= maxFreq),:],axis=1) - np.sum(spec[f > maxFreq,:],axis=1)
+    else:
+        spectDiff = np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=1) - np.sum(spec[f > maxFreq,:],axis=1)
+    return spectDiff.rolling(dur*fs).sum()
+
+# def findMaxThenReduce(sig,fs,minGap=5):
+    
+
+testSig = pd.DataFrame(np.random.normal(loc=0,scale=5,size=1000))
+testRoll = testSig.rolling(60*25,closed="right").sum()
+np.argmax(testSig)
 
 
-# rem < len(tst)
+def maxWithGap(sig,fs,minGap=5,numPoints = 20):
+    """
+    Calculate the highest values across time-series signal `sig` with a minimum time gap between
+    
+    Args:
+        sig:        signal whose largest values are to be found.
+        fs:         signal sampling frequency (Hz).
+        minGap:     minimum time gap between largest values (mins). Defaults to 5.#
+        numPoints:  number of 'max points' to be found. Defaults to 20.
 
-# tst.drop(rem,axis=1)
+    Returns:
+        List of length numPoints of ranges indicating indeces of highest values within sig.        
+    """
+    out = []
+    while len(out) != numPoints:
+        sig.index(max(sig))
 
-# np.max(rem)
+dat = readBIP("https://bipsharedata.s3.ap-northeast-1.amazonaws.com/analysis/cal_wind2/Axy/3a66a690-5d53-4bed-a4a7-4d25a1569c4d/3a66a690-5d53-4bed-a4a7-4d25a1569c4d_std.csv",cols='acc')
 
-# [distance.distance((x,y),FkOshima).m for x,y in zip(tstGPS.lat,tstGPS.lon)]
+FkOshima = [39.400,141.998] # capture site
+test = removeNearCS(dat,[39.400,141.998], 5)
+test = []
+
+[np.arange(randint(0,9),randint(10,19)) for n in range(20)]
+
