@@ -1,8 +1,10 @@
 import re
 
+from scipy import signal
 import numpy as np
 import pandas as pd
 import geopy.distance as distance
+
 from scipy import stats
 
 def readAxyGPS(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S"): 
@@ -227,9 +229,9 @@ def removeNearCS(data, captureSite, distThreshold = 1.5):
 
     return data.drop(rem)
 
-def passFilt(sig, passband, stopband, fs):
+def lowEquiFilt(sig, passband, stopband, fs):
     """
-    Generate and apply passband equiripple filter (equivalent to MATLAB default passband filter).
+    Generate and apply lowpass equiripple filter (equivalent to MATLAB default lowpass filter).
 
     Args:
         sig:        signal to apply filter to.
@@ -245,7 +247,6 @@ def passFilt(sig, passband, stopband, fs):
     ptSig = signal.filtfilt(b=eqFil,a=1,x=sig);
     
     return ptSig
-
 
 # create static and dynamic (1 pass, 1.5 stop), pitch, roll, ODBA
 
@@ -266,7 +267,7 @@ def hammingSpect(sig,fs=25):
     numoverlap = round(.9875*winsize); #(85%)
     win = signal.windows.hamming(winsize);
 
-    f, t, Sxx = signal.spectrogram(DZ,fs,window=win,noverlap=numoverlap)
+    f, t, Sxx = signal.spectrogram(sig,fs,window=win,noverlap=numoverlap)
 
     return f, t, Sxx
 
@@ -287,18 +288,12 @@ def rollingSpecSum(spec,f,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
         Summed frequency intensities across spec object.
     """
     if inclusive:
-        spectDiff = np.sum(spec[(f >= minFreq) & (f <= maxFreq),:],axis=1) - np.sum(spec[f > maxFreq,:],axis=1)
+        spectDiff = pd.Series(np.sum(spec[(f >= minFreq) & (f <= maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
     else:
-        spectDiff = np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=1) - np.sum(spec[f > maxFreq,:],axis=1)
-    return spectDiff.rolling(dur*fs).sum()
+        spectDiff = pd.Series(np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
+    return spectDiff.rolling(dur*fs, closed = "both", min_periods = 1).sum()
 
-# def findMaxThenReduce(sig,fs,minGap=5):
-    
-
-testSig = pd.DataFrame(np.random.normal(loc=0,scale=5,size=1000))
-testRoll = testSig.rolling(60*25,closed="right").sum()
-np.argmax(testSig)
-
+test
 
 def maxWithGap(sig,fs,minGap=5,numPoints = 20):
     """
@@ -320,9 +315,65 @@ def maxWithGap(sig,fs,minGap=5,numPoints = 20):
 dat = readBIP("https://bipsharedata.s3.ap-northeast-1.amazonaws.com/analysis/cal_wind2/Axy/3a66a690-5d53-4bed-a4a7-4d25a1569c4d/3a66a690-5d53-4bed-a4a7-4d25a1569c4d_std.csv",cols='acc')
 
 FkOshima = [39.400,141.998] # capture site
-test = removeNearCS(dat,[39.400,141.998], 5)
-test = []
+colRemDat = removeNearCS(dat,[39.400,141.998], 5)
 
-[np.arange(randint(0,9),randint(10,19)) for n in range(20)]
+static = dict(zip(["SY","SX","SZ"],[lowEquiFilt(x, 1, 1.5, 25) for x in [colRemDat.Y, colRemDat.X, colRemDat.Z]]))
+
+dynamic = dict(zip(["DY","DX","DZ"],[x - y for x,y in zip([colRemDat.Y, colRemDat.X, colRemDat.Z],static.values())]))
+
+colRemDat.join([pd.DataFrame(static)])
+
+pd.DataFrame(static)
+
+# split data across dates
+dates = np.unique(colRemDat.DT.dt.date)
+
+# for date in dates:
+dayRemDat = colRemDat.loc[colRemDat.DT.dt.date == dates[0],:]
+# create dynamic and static accelerations
+
+static = dict(zip(["SY","SX","SZ"],[lowEquiFilt(x, 1, 1.5, 25) for x in [dayRemDat.Y, dayRemDat.X, dayRemDat.Z]]))
+
+
+
+pd.concat([dayRemDat])
+
+
+
+dayRemDat = dayRemDat.join(pd.DataFrame().transpose().rename(columns={0:"SY",1:"SX",2:"SZ"}))
+
+pd.DataFrame()
+
+
+dayRemDat.merge(pd.DataFrame(
+
+).transpose().rename(columns={"Y":"DY","X":"DX","Z":"DZ"}))
+
+# check if enough data for analysis (> 2 hours)
+# if len(dayRemDat <= (25*2*3600)):
+#     continue
+f,t,Sxx = hammingSpect(dayRemDat.X, 25)
+rollSum = rollingSpecSum(Sxx, f, 3, 5)
+
+f, t, Sxx = hammingSpect(test.X[15000:(15000 + (24*3600*25))],25)
+
+# def findMaxThenReduce(sig,fs,minGap=5):
+rollTest = rollingSpecSum(Sxx, f, 3, 5)
+
+out = []
+# while len(out) < 20:
+np.arange(rollTest.idxmax() - ,rollTest.idxmax())
+
+import matplotlib.pyplot as plt
+plt.plot(rollTest)
+plt.show()
+len(rollTest)/(25*60)
+
+
+
+
+rollTest.idxmax()
+
+np.floor(25*60*2.5).astype(int)
 
 
