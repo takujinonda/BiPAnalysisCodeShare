@@ -1,3 +1,4 @@
+#%%
 import re
 
 from scipy import signal
@@ -293,8 +294,6 @@ def rollingSpecSum(spec,f,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
         spectDiff = pd.Series(np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
     return spectDiff.rolling(dur*fs, closed = "both", min_periods = 1).sum()
 
-test
-
 def maxWithGap(sig,fs,minGap=5,numPoints = 20):
     """
     Calculate the highest values across time-series signal `sig` with a minimum time gap between
@@ -317,60 +316,83 @@ dat = readBIP("https://bipsharedata.s3.ap-northeast-1.amazonaws.com/analysis/cal
 FkOshima = [39.400,141.998] # capture site
 colRemDat = removeNearCS(dat,[39.400,141.998], 5)
 
+# static acceleration
 static = dict(zip(["SY","SX","SZ"],[lowEquiFilt(x, 1, 1.5, 25) for x in [colRemDat.Y, colRemDat.X, colRemDat.Z]]))
 
+# dynamic acceleration
 dynamic = dict(zip(["DY","DX","DZ"],[x - y for x,y in zip([colRemDat.Y, colRemDat.X, colRemDat.Z],static.values())]))
 
-colRemDat.join([pd.DataFrame(static)])
-
-pd.DataFrame(static)
+# add static and dynamic info
+colRemDat = colRemDat.join([pd.DataFrame(static).set_index(colRemDat.index),pd.DataFrame(dynamic).set_index(colRemDat.index)])
 
 # split data across dates
 dates = np.unique(colRemDat.DT.dt.date)
 
 # for date in dates:
 dayRemDat = colRemDat.loc[colRemDat.DT.dt.date == dates[0],:]
-# create dynamic and static accelerations
-
-static = dict(zip(["SY","SX","SZ"],[lowEquiFilt(x, 1, 1.5, 25) for x in [dayRemDat.Y, dayRemDat.X, dayRemDat.Z]]))
-
-
-
-pd.concat([dayRemDat])
-
-
-
-dayRemDat = dayRemDat.join(pd.DataFrame().transpose().rename(columns={0:"SY",1:"SX",2:"SZ"}))
-
-pd.DataFrame()
-
-
-dayRemDat.merge(pd.DataFrame(
-
-).transpose().rename(columns={"Y":"DY","X":"DX","Z":"DZ"}))
 
 # check if enough data for analysis (> 2 hours)
 # if len(dayRemDat <= (25*2*3600)):
 #     continue
+
 f,t,Sxx = hammingSpect(dayRemDat.X, 25)
 rollSum = rollingSpecSum(Sxx, f, 3, 5)
-
-f, t, Sxx = hammingSpect(test.X[15000:(15000 + (24*3600*25))],25)
 
 # def findMaxThenReduce(sig,fs,minGap=5):
 rollTest = rollingSpecSum(Sxx, f, 3, 5)
 
 out = []
 # while len(out) < 20:
-np.arange(rollTest.idxmax() - ,rollTest.idxmax())
-
+# np.arange(rollTest.idxmax() - ,rollTest.idxmax())
+#%%
 import matplotlib.pyplot as plt
-plt.plot(rollTest)
+
+plt.plot(dayRemDat.DT[(dayRemDat.DT >= (dayRemDat.DT[0] + np.timedelta64(1960,'ms')))& (dayRemDat.DT <= (dayRemDat.DT.iloc[-1] - np.timedelta64(2,'s')))].values,rollSum.values)
 plt.show()
-len(rollTest)/(25*60)
+
+#%%
+
+# add ODBA
+dayRemDat['ODBA'] = np.sqrt(dayRemDat[['SY','SX','SZ']].pow(2).sum(axis=1))
+
+plt.plot(dayRemDat.DT.values,dayRemDat.ODBA.rolling(60*25, closed = "both", min_periods = 1).mean().values)
+plt.show()
+
+#%%
+# Plot the signal
+import matplotlib.dates as mdates
+fig,(ax1,ax2) = plt.subplots(2)
+# plt.subplots(211)
+ax1.plot(dayRemDat.DT.values,dayRemDat.DX.values)
+ax1.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
+
+# plt.xlabel('Time')
+ax1.set_xlabel('Time')
+ax1.set_ylabel('Dorsoventral acceleration')
+# plt.ylabel('Dorsoventral acceleration')
 
 
 
+
+# Plot the spectrogram
+
+powerSpectrum, freqenciesFound, time, imageAxis = ax2.specgram(dayRemDat.DX, Fs=25)
+
+# plt.xlabel('Time')
+
+# plt.ylabel('Frequency')
+plt.show()
+#%%
+kde = KernelDensity(kernel='gaussian').fit([dayRemDat.ODBA.values])
+plt.plot(kde)
+
+kde.get_params()
+
+from sklearn.neighbors import KernelDensity
+b = stats.gaussian_kde(dayRemDat.X)
+b(positions)
+plt.plot(stats.gaussian_kde(dayRemDat.X))
+plt.show()
 
 rollTest.idxmax()
 
