@@ -328,8 +328,9 @@ colRemDat = colRemDat.join([pd.DataFrame(static).set_index(colRemDat.index),pd.D
 # split data across dates
 dates = np.unique(colRemDat.DT.dt.date)
 
+#%%
 # for date in dates:
-dayRemDat = colRemDat.loc[colRemDat.DT.dt.date == dates[0],:]
+dayRemDat = colRemDat.loc[colRemDat.DT.dt.date == dates[1],:]
 
 # check if enough data for analysis (> 2 hours)
 # if len(dayRemDat <= (25*2*3600)):
@@ -342,6 +343,11 @@ rollSum = rollingSpecSum(Sxx, f, 3, 5)
 rollTest = rollingSpecSum(Sxx, f, 3, 5)
 
 out = []
+
+# now find round(24 * 20)/no.hours occasions of flight 5 mins apart
+
+
+
 # while len(out) < 20:
 # np.arange(rollTest.idxmax() - ,rollTest.idxmax())
 #%%
