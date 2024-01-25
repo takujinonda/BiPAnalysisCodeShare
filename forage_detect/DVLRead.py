@@ -1,7 +1,9 @@
 # DVLRead
 
 from pathlib import Path
+
 import pandas as pd
+import re
 
 # parent folder for all DVL data
 dvlFolders = "E:/My Drive/PhD/Data/2018Shearwater/DVL"
@@ -74,6 +76,30 @@ tagInfo = {
     }
 }
 
-for path in Path(dvlFolders).rglob('*acc*.txt'):
-    print(path.name)
+# initialise dictionary
+tagData = {}
 
+for path in Path(dvlFolders).rglob('*acc*.txt'):
+
+    # read in acceleration data
+    dat = pd.read_table(path.__str__(), skiprows = 7, sep = ',', usecols = [0,1,2])
+
+    # add time series
+    dat['DT'] = pd.date_range(tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)]['accStart'], periods = len(dat), freq = '20ms')
+
+    # select data within video range
+    dat = dat[(dat.DT >= tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)]['vidStart']) & (dat.DT < tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)]['vidStart'] + pd.Timedelta(hours=2))]
+
+    # read in the video behaviour records
+    behavClass = pd.read_csv('E:/My Drive/PhD/Data/2018Shearwater/DVL/DiveBehavClass.csv', sep = ',', usecols = [0,1,2,4], dtype = {'Tag' : str})
+
+    # replace 'Dive' behaviour with 's' (surface) or 'd' (dive)
+    behavClass.loc[behavClass['Behaviour'] == 'Dive','Behaviour'] = behavClass.loc[behavClass.Behaviour == 'Dive','ForageBeh']
+
+    # remove superfluous column
+    behavClass.drop('ForageBeh',axis = 1, inplace = True)
+
+    # extract behaviours for the specific tag
+    behavClass.drop(behavClass[behavClass.Tag != re.search(r"(\d{5}?).txt",path.name).group(1)].index, inplace = True)
+
+    tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'Acc' : dat, 'Beh' : behavClass}
