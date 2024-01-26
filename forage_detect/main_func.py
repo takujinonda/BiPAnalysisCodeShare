@@ -89,20 +89,6 @@ def gps_distanceSingle(longitudes, latitudes, latVal, lonVal):
 
     return [distance.distance((x,y),(latVal,lonVal)).km for x,y in zip(latitudes,longitudes)]
 
-def distSpeed(lat,lon,DT):
-
-    dist,speed = gps_speed(lat,lon,DT)
-    while np.nanmax(speed) > threshold:
-
-        # remove erroneous GPS values
-        lon[speed > threshold] = np.nan
-        lat[speed > threshold] = np.nan
-
-        # recalculate speed
-        dist,speed = gps_speed(lat,lon,DT)
-    
-    return dist,speed
-
 # to be placed elsewhere
 import re
 
@@ -175,26 +161,54 @@ def gps_speed(longitudes, latitudes, timestamps):
     dist = np.insert(dist, 0, np.nan, axis=0)                                                               
     return dist,speed
 
-def main_func(df):
-    df['time'] = pd.to_datetime(df['time'], format='ISO8601')
-    df = df.drop_duplicates('time', keep='last')
-    df = df.dropna()
-    df = df.reset_index()
-    df = df.drop(['index'], axis=1)
-    df.rename(columns={'time': 'DT', 'latitude': 'lat', 'longitude': 'lon'}, inplace=True)
-    df['DT'] = [dtFormat(str(x)) for x in df['DT']]
-    df['DT'] = pd.to_datetime(df['DT'],format="%Y-%m-%d %H:%M:%S.%f") #一旦、+00:00を除くために文字列にする
-    
-    if len(df) >0:
-        out = windEstimation2(df, isBp = True)
-        out = out.rename(columns={"Time":"time", "Lat":"latitude", "Lon":"longitude"})
-        
-        #すでにUTCなので不要
-        out['time'] = pd.to_datetime(out['time'], format='%Y-%m-%d %H:%M:%S.%f', errors='coerce').dt.tz_localize('UTC')
+def distSpeed(lat,lon,DT,threshold=None):
+    """
+    Calculates distances (metres) and speed (m/s) of GPS positions and datetime information. Uses a speed threshold (default None) to define erroneous GPS positions. GPS and datetime lengths must agree.
 
-        return out
-    else:
-        return pd.DataFrame(columns=['Time','Lat','Lon','MeanHead','X','Y'])
+    Args:
+
+        lat:    array of latitude points in decimal degrees.
+        lon:    array of longitude points in decimal degrees.
+        DT:     datetime array in Pandas datetime format.
+
+    Returns:
+        Float arrays of distance and speed values.
+    """
+
+    dist,speed = gps_speed(lat,lon,DT)
+    if threshold is not None:
+
+        while np.nanmax(speed) > threshold:
+
+            # remove erroneous GPS values
+            lon[speed > threshold] = np.nan
+            lat[speed > threshold] = np.nan
+
+            # recalculate speed
+            dist,speed = gps_speed(lat,lon,DT)
+    
+    return dist,speed
+
+# def main_func(df):
+#     df['time'] = pd.to_datetime(df['time'], format='ISO8601')
+#     df = df.drop_duplicates('time', keep='last')
+#     df = df.dropna()
+#     df = df.reset_index()
+#     df = df.drop(['index'], axis=1)
+#     df.rename(columns={'time': 'DT', 'latitude': 'lat', 'longitude': 'lon'}, inplace=True)
+#     df['DT'] = [dtFormat(str(x)) for x in df['DT']]
+#     df['DT'] = pd.to_datetime(df['DT'],format="%Y-%m-%d %H:%M:%S.%f") #一旦、+00:00を除くために文字列にする
+    
+#     if len(df) >0:
+#         out = windEstimation2(df, isBp = True)
+#         out = out.rename(columns={"Time":"time", "Lat":"latitude", "Lon":"longitude"})
+        
+#         #すでにUTCなので不要
+#         out['time'] = pd.to_datetime(out['time'], format='%Y-%m-%d %H:%M:%S.%f', errors='coerce').dt.tz_localize('UTC')
+
+#         return out
+#     else:
+#         return pd.DataFrame(columns=['Time','Lat','Lon','MeanHead','X','Y'])
 
 def removeNearCS(data, captureSite, distThreshold = 1.5):
     """
