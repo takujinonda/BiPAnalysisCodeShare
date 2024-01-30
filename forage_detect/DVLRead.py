@@ -1,6 +1,8 @@
 # DVLRead
 
 from pathlib import Path
+# bring in functions from main_func
+from forage_detect.main_func import *
 
 import pandas as pd
 import re
@@ -34,11 +36,18 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     # read in acceleration data
     dat = pd.read_table(path.__str__(), skiprows = 7, sep = ',', usecols = [0,1,2])
 
+    # remove whitespace from headers
+    dat.rename(columns=lambda x: x.strip(), inplace = True)
+
     # add time series
     dat['DT'] = pd.date_range(tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][0], periods = len(dat), freq = '200ms')
 
     # select data within video range
     dat = dat[(dat.DT >= tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1]) & (dat.DT < tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1] + pd.Timedelta(hours=2))]
+
+    # add static and dynamic accelerations
+    dat.loc[:,['sX','sY','sZ']] = dat.loc[:,['X','Y','Z']].apply(lambda x: lowEquiFilt(x,1,1.5,25)).values
+    dat.loc[:,['dY','dX','dZ']] = [dat.iloc[:,x] - dat.iloc[:,x + 4] for x in range(2)]
 
     # read in the video behaviour records
     behavClass = pd.read_csv('E:/My Drive/PhD/Data/2018Shearwater/DVL/DiveBehavClass.csv', sep = ',', usecols = [0,1,2,4], dtype = {'Tag' : str})
@@ -52,6 +61,38 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     # extract behaviours for the specific tag
     behavClass.drop(behavClass[behavClass.Tag != re.search(r"(\d{5}?).txt",path.name).group(1)].index, inplace = True)
 
-    tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'Acc' : dat, 'Beh' : behavClass}
+    # set time to datetime
+    behavClass.Time = pd.to_datetime('31/08/2018 ' + behavClass.Time, format = '%d/%m/%Y %H.%M.%S.%f')
 
-# returns dictionary for each tag, each contain two keys, 'Acc' for acceleration data, 'Beh' for video-derived behaviours. Data should be aligned.
+    tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'acc' : dat, 'beh' : behavClass}
+
+# returns dictionary for each tag, each contain two keys, 'acc' for acceleration data, 'beh' for video-derived behaviours. Data should be aligned.
+
+
+dat.loc[:,[['X','sX'],['Y','sY']]]
+
+
+dat.iloc[:,[0,4]].diff(axis=1).iloc[:,1].values
+
+range(2).apply(lambda x: dat.iloc[:,x] - dat.iloc[:,x + 4])
+
+dat.iloc[:,range(2)] - dat.iloc[:,range(4,7)]
+
+
+dat.iloc[:,0]
+
+
+# for tag in tagData:
+#     tag['acc'].loc[:,['SY','SX','SZ']]
+
+tagData['17008']['acc'].loc['SX','SY','SZ'] = 
+
+tagData['17008']['acc'].assign([lowEquiFilt(x,1,1.5,25) for x in zip([tagData['17008']['acc'].X,tagData['17008']['acc'].Y,tagData['17008']['acc'].Z])])
+
+
+
+df[cols]=df[cols].apply(lambda x: pd.to_datetime(x ,errors='coerce')).dt.strftime('%Y-%b-%d')
+
+
+for tag in tagData.keys():
+    static = dict(zip(['SY','SX','SZ'],))
