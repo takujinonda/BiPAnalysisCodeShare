@@ -17,6 +17,7 @@
 2. [x] Speed/distance calculations
    1. [x] Remove erroneous GPS positions
    2. [x] Remove periods close to colony
+   3. [ ] For DVL only: remove minutes surround 'AT' labelled behaviours for spectrogram moving sum differences signal
 3. [ ] Calculate flight periods
    1. [x] $acc_S$ & $acc_D$
    2. [ ] Pitch and $p_{mn}$, moving mean over 10 seconds
@@ -40,7 +41,7 @@
       8. [ ] $ g( \overline{p}) + 2 g( h(p))$ 
       9. [ ] $ g(\overline{p}) - 2g(h(p))$
       10. [ ] $ g(\min{p}) $
-  5. [ ] Generate ethogram (same `length` as acceleration record)
+  1. [ ] Generate ethogram (same `length` as acceleration record)
      1. [ ] Set all as "Rest"
      2. [ ] Calculate moving mean of pitch and moving variance of $x_D$
      3. [ ] Identify $\Delta_z$ greater than threshold
@@ -53,4 +54,22 @@
         1.  [ ] Search for preceeding dives
         2.  [ ] Check for large downward pitch change
         3.  [ ] Check if dive continues to reach above-normal pitch levels
-   6. Set all foraging $<1$s or any $<2$s with two large downard pitch changes to `"Unknown"`
+   2. Set all foraging $<1$s or any $<2$s with two large downard pitch changes to `"Unknown"`
+
+
+### Current System
+
+* Read in and formatting
+  * AxyTrek (`readAxyGPS`)
+  * BiP-formatted (`readBiP`)
+    * Format the BiP datetime (`dtFormat`)
+* Distances and speed
+  * Distances of multiple GPS points to single (`gps_distanceSingle`)
+  * Distance and speed of GPS points and datetime (`gps_speed`)
+  * Distance and speed of GPS points and datetime with speed threshold (`distSpeed`)
+  * Remove acceleration and GPS data within threshold distance of capture site (`removeNearCS`)
+* DSP
+  * Generate and apply equiripple filter (`lowEquiFilt`)
+  * Create a spectrogram with a 4 second hamming window with 85% overlap (`hammingSpect`)
+  * Differences between summed spectrogram energies within defined frequencies (`rollingSpecSum`)
+  * 
