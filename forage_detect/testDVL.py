@@ -3,12 +3,13 @@
 from pathlib import Path
 # bring in functions from main_func
 from forage_detect.main_func import *
+from math import pi
 
 import pandas as pd
 import re
 
 # parent folder for all DVL data
-dvlFolders = "E:/My Drive/PhD/Data/2018Shearwater/DVL"
+dvlFolders = "F:/My Drive/PhD/Data/2018Shearwater/DVL"
 
 # acc and vid starttimes
 st17008 = [pd.to_datetime('31/08/2018 06:00:00', format = "%d/%m/%Y %H:%M:%S"),
@@ -46,11 +47,17 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     dat = dat[(dat.DT >= tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1]) & (dat.DT < tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1] + pd.Timedelta(hours=2))]
 
     # add static and dynamic accelerations
-    dat.loc[:,['sX','sY','sZ']] = dat.loc[:,['X','Y','Z']].apply(lambda x: lowEquiFilt(x,1,1.5,25)).values
-    dat.loc[:,['dY','dX','dZ']] = [dat.iloc[:,x] - dat.iloc[:,x + 4] for x in range(2)]
+    dat.loc[:,['sX','sY','sZ','dX','dY','dZ']] = np.concatenate(dat.loc[:,['X','Y','Z']].apply(lambda x: lowEquiFilt(x,1,1.5,20)).values, axis = 0)
+
+    # calculate pitch
+    dat.loc[:,'pitch'] = np.arcsin(dat.sX) * 180/pi
+
+    # generate spectrogram and summed spectral energy difference
+    f,s,Sxx = hammingSpect(dat.Z, fs = 20)
+    rollSum = rollingSpecSum(Sxx, f, 3, 5, fs = 20)
 
     # read in the video behaviour records
-    behavClass = pd.read_csv('E:/My Drive/PhD/Data/2018Shearwater/DVL/DiveBehavClass.csv', sep = ',', usecols = [0,1,2,4], dtype = {'Tag' : str})
+    behavClass = pd.read_csv('F:/My Drive/PhD/Data/2018Shearwater/DVL/DiveBehavClass.csv', sep = ',', usecols = [0,1,2,4], dtype = {'Tag' : str})
 
     # replace 'Dive' behaviour with 's' (surface) or 'd' (dive)
     behavClass.loc[behavClass['Behaviour'] == 'Dive','Behaviour'] = behavClass.loc[behavClass.Behaviour == 'Dive','ForageBeh']
@@ -64,11 +71,20 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     # set time to datetime
     behavClass.Time = pd.to_datetime('31/08/2018 ' + behavClass.Time, format = '%d/%m/%Y %H.%M.%S.%f')
 
+    # remove periods containing AT behaviour
+    if behavClass.Behaviour.eq('AT').any():
+        for b in behavClass.index[behavClass.Behaviour == 'AT'].tolist():
+            
+
+
+    
+behavClass.Time[behavClass.index[behavClass.Behaviour == 's'].tolist()].round("s") - pd.Timedelta(30,'sec')
+
     tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'acc' : dat, 'beh' : behavClass}
 
 # returns dictionary for each tag, each contain two keys, 'acc' for acceleration data, 'beh' for video-derived behaviours. Data should be aligned.
 
-
+tagData['17008']
 dat.loc[:,[['X','sX'],['Y','sY']]]
 
 
