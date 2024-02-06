@@ -246,7 +246,7 @@ def removeNearCS(data, captureSite, distThreshold = 1.5):
 
 def lowEquiFilt(sig, passband, stopband, fs):
     """
-    Generate and apply lowpass equiripple filter (equivalent to MATLAB default lowpass filter).
+    Generate and apply lowpass equiripple filter (equivalent to MATLAB default lowpass filter) to produce static (low pass) and dynamic (original - low pass - see Patterson et al. 2019)
 
     Args:
         sig:        signal to apply filter to.
@@ -255,13 +255,16 @@ def lowEquiFilt(sig, passband, stopband, fs):
         fs:         sig sampling frequency (Hz).
 
     Returns:
-        Filtered signal as array of same length sig.
+        `static`, the low pass filtered signal, and `dynamic`, the difference between the original signal and `static`. Both are arrays of same length as sig
     """
-    eqFil=signal.remez(101,[0,passband,stopband,fs*.5],[1,0],fs=fs) # generate equiripple filter
-    eqFil=signal.remez(101,[0,1.5,2,fs*.5],[1,0],fs=fs)
-    ptSig = signal.filtfilt(b=eqFil,a=1,x=sig);
+    # generate equiripple filter
+    eqFil=signal.remez(101,[0,passband,stopband,fs*.5],[1,0],fs=fs)
+    # return 'static' signals for each provided signal
+    static = signal.filtfilt(b=eqFil,a=1,x=sig)
+    # return 'dynamic' acceleration signal
+    dynamic = np.array(sig - static)
     
-    return ptSig
+    return static, dynamic
 
 # create static and dynamic (1 pass, 1.5 stop), pitch, roll, ODBA
 
