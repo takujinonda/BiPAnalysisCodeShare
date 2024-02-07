@@ -49,8 +49,8 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     # add static and dynamic accelerations
     dat.loc[:,['sX','sY','sZ','dX','dY','dZ']] = np.concatenate(dat.loc[:,['X','Y','Z']].apply(lambda x: lowEquiFilt(x,1,1.5,20)).values, axis = 0)
 
-    # calculate pitch
-    dat.loc[:,'pitch'] = np.arcsin(dat.sX) * 180/pi
+    # calculate pitch (clip array to min max of -1 1, assumes acceleration measured in g)
+    dat.loc[:,'pitch'] = np.arcsin(np.clip(dat.sY,-1,1)) * 180/pi
 
     # generate spectrogram and summed spectral energy difference
     f,s,Sxx = hammingSpect(dat.Z, fs = 20)
@@ -73,12 +73,15 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
 
     # remove periods containing AT behaviour
     if behavClass.Behaviour.eq('AT').any():
-        for b in behavClass.index[behavClass.Behaviour == 'AT'].tolist():
+        for b in behavClass.Time[behavClass.Behaviour == 'AT'].round('s').values:
             
 
+mask = (dat.DT > find[0] - pd.Timedelta(30,'sec')) & (dat.DT < find[0] + pd.Timedelta(30,'sec'))
 
+dat.DT[mask]
     
-behavClass.Time[behavClass.index[behavClass.Behaviour == 's'].tolist()].round("s") - pd.Timedelta(30,'sec')
+find = behavClass.Time[behavClass.index[behavClass.Behaviour == 's']].round("s").values
+
 
     tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'acc' : dat, 'beh' : behavClass}
 
