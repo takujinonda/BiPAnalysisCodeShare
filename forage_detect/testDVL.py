@@ -76,11 +76,11 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
         for b in behavClass.Time[behavClass.Behaviour == 'AT'].round('s').values:
             
 
+find = behavClass.Time[behavClass.index[behavClass.Behaviour == 's']].round("s").values
 mask = (dat.DT > find[0] - pd.Timedelta(30,'sec')) & (dat.DT < find[0] + pd.Timedelta(30,'sec'))
 
 dat.DT[mask]
     
-find = behavClass.Time[behavClass.index[behavClass.Behaviour == 's']].round("s").values
 
 
     tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'acc' : dat, 'beh' : behavClass}
