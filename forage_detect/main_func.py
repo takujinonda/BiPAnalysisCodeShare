@@ -282,7 +282,7 @@ def hammingSpect(sig,fs=25):
     #set window size of 4 seconds
     winsize = fs*4
     #set overlap between windows (will determine the temporal resolution
-    numoverlap = round(.9875*winsize); #(85%)
+    numoverlap = np.floor(.9875*winsize); #(85%)
     win = signal.windows.hamming(winsize);
 
     f, t, Sxx = signal.spectrogram(sig,fs,window=win,noverlap=numoverlap)
