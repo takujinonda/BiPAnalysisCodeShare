@@ -18,14 +18,17 @@
 2. [x] Speed/distance calculations
    1. [x] Remove erroneous GPS positions
    2. [x] Remove periods close to colony
-   3. [ ] For DVL only: remove minutes surround 'AT' labelled behaviours for spectrogram moving sum differences signal
+   3. [x] For DVL only: remove minutes surround 'AT' labelled behaviours for spectrogram moving sum differences signal
 3. [ ] Calculate flight periods
-   1. [x] $acc_S$ & $acc_D$
-   2. [ ] Pitch and $p_{mn}$, moving mean over 10 seconds
-   3. [ ] ODBA and $ODBA_{mn}$, moving mean over 10 seconds
-   4. [x] Extract frequency content intensity difference between $3 < x < 5$ and $x > 5$, henceforth $i_f$
-   5. [ ] Ignore data where duration $< 120$ minutes
-   6. [ ] Find indeces 20 minutes where $i_f$ is largest minimum of 5 minutes apart
+   1. [x] Generate a full acceleration feature calculator (saves memory?)
+      1. [x] pass all acceleration columns
+      2. [x] must understand which is longitudinal and which is dorsoventral
+      3. [x] $acc_S$ & $acc_D$
+      4. [x] Pitch and $p_{mn}$, moving mean over 10 seconds
+      5. [x] ODBA and $ODBA_{mn}$, moving mean over 10 seconds
+   2. [x] Extract frequency content intensity difference between $3 < x < 5$ and $x > 5$, henceforth $i_f$
+   3. [ ] Ignore data where duration $< 120$ minutes
+   4. [ ] Find indeces of 20 one minute periods where $i_f$ is largest minimum of 5 minutes apart
 4. [ ] Extract typical flight thresholds
    1. [ ] Find peaks / troughs and ensure signal starts with a peak (for difference calculation)
    2. [ ] Find overlap of flapping with estimated flight periods
