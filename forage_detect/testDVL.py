@@ -9,7 +9,7 @@ import pandas as pd
 import re
 
 # parent folder for all DVL data
-dvlFolders = "F:/My Drive/PhD/Data/2018Shearwater/DVL"
+dvlFolders = "E:/My Drive/PhD/Data/2018Shearwater/DVL"
 
 # acc and vid starttimes
 st17008 = [pd.to_datetime('31/08/2018 06:00:00', format = "%d/%m/%Y %H:%M:%S"),
@@ -41,7 +41,7 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     dat.rename(columns=lambda x: x.strip(), inplace = True)
 
     # add time series
-    dat['DT'] = pd.date_range(tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][0], periods = len(dat), freq = '200ms')
+    dat['DT'] = pd.date_range(tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][0], periods = len(dat), freq = '50ms')
 
     # select data within video range
     dat = dat[(dat.DT >= tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1]) & (dat.DT < tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1] + pd.Timedelta(hours=2))]
@@ -57,7 +57,7 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     rollSum = rollingSpecSum(Sxx, f, 3, 5, fs = 20)
 
     # read in the video behaviour records
-    behavClass = pd.read_csv('F:/My Drive/PhD/Data/2018Shearwater/DVL/DiveBehavClass.csv', sep = ',', usecols = [0,1,2,4], dtype = {'Tag' : str})
+    behavClass = pd.read_csv('E:/My Drive/PhD/Data/2018Shearwater/DVL/DiveBehavClass.csv', sep = ',', usecols = [0,1,2,4], dtype = {'Tag' : str})
 
     # replace 'Dive' behaviour with 's' (surface) or 'd' (dive)
     behavClass.loc[behavClass['Behaviour'] == 'Dive','Behaviour'] = behavClass.loc[behavClass.Behaviour == 'Dive','ForageBeh']
@@ -73,15 +73,11 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
 
     # remove periods containing AT behaviour
     if behavClass.Behaviour.eq('AT').any():
-        for b in behavClass.Time[behavClass.Behaviour == 'AT'].round('s').values:
-            
+        behAT = np.any([(dat.DT >= (x - pd.Timedelta(30,'sec'))) & (dat.DT <= (x + pd.Timedelta(30,'sec'))) for x in behavClass.Time[behavClass.index[behavClass.Behaviour == 'AT']].round("s").values], axis = 0)
 
-find = behavClass.Time[behavClass.index[behavClass.Behaviour == 's']].round("s").values
-mask = (dat.DT > find[0] - pd.Timedelta(30,'sec')) & (dat.DT < find[0] + pd.Timedelta(30,'sec'))
+        rollSum[behAT[(2*20):-(2*20)+1]] = min(rollSum)
 
-dat.DT[mask]
     
-
 
     tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'acc' : dat, 'beh' : behavClass}
 
