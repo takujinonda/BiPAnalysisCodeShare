@@ -266,7 +266,35 @@ def lowEquiFilt(sig, passband, stopband, fs):
     
     return static, dynamic
 
-# create static and dynamic (1 pass, 1.5 stop), pitch, roll, ODBA
+# create static and dynamic (1 pass, 1.5 stop), pitch, ODBA
+def accFeatures(acc, long_acc_name, passb, stopb, fs):
+    """
+    Generate acceleration features (pitch, ODBA, and their 10 second moving means)
+
+    Args:
+        acc:                dataframe of acceleration signals.
+        long_acc_name:      list of names for acceleration signals. Must conform to the following order - longitudinal (along body axis), dorsoventral (vertical axis), lateral.
+        passb:              passband frequency (Hz).
+        stopb:              stopband frequency (Hz). Must be higher than pass as lowpass filter is applied.
+        fs:                 acceleartion signal sampling frequency (Hz).
+
+    Returns:
+        'out', Pandas Dataframe containing the following columns: 'pitch', pitch angles of acceleration signal, calculated via method from Sat et al. (2003). 'ODBA', Overall Dynamic Body Acceleration (the sum of absolute dynamic acceleration magnitudes). 'pitmn' and 'ODmn', 10 second moving means of pitch and ODBA respectively
+    """
+
+    # take acceleration signal names
+    sLong, dLong = lowEquiFilt(acc[long_acc_name[0]], passb, stopb, fs)
+    _, dDV = lowEquiFilt(acc[long_acc_name[1]], passb, stopb, fs)
+    _, dLat = lowEquiFilt(acc[long_acc_name[2]], passb, stopb, fs)
+
+    pitch = np.arcsin(np.clip(sLong,-1,1)) * 180/pi
+    Odba = sum([np.abs(dLong),np.abs(dDV),np.abs(dLat)])
+
+    out = pd.DataFrame({'pitch':pitch,'ODBA':Odba})
+    out['pitmn'] = out.pitch.rolling(10*fs, closed = "both", min_periods = 1).mean()
+    out['ODmn'] = out.ODBA.rolling(10*fs, closed = "both", min_periods = 1).mean()
+
+    return out
 
 def hammingSpect(sig,fs=25):
     """
@@ -328,3 +356,5 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
     out = []
     while len(out) != numPoints:
         sig.index(max(sig))
+
+# %%
