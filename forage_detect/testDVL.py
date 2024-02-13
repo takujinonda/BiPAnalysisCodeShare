@@ -46,12 +46,9 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     # select data within video range
     dat = dat[(dat.DT >= tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1]) & (dat.DT < tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1] + pd.Timedelta(hours=2))]
 
-    # add static and dynamic accelerations
-    dat.loc[:,['sX','sY','sZ','dX','dY','dZ']] = np.concatenate(dat.loc[:,['X','Y','Z']].apply(lambda x: lowEquiFilt(x,1,1.5,20)).values, axis = 0)
-
     # calculate pitch (clip array to min max of -1 1, assumes acceleration measured in g)
-    dat.loc[:,'pitch'] = np.arcsin(np.clip(dat.sY,-1,1)) * 180/pi
-
+    dat = pd.concat([dat.reset_index(), accFeatures(dat[['X','Y','Z']],['Y','Z','X'],1.5,3,20)], axis = 1, in)
+    
     # generate spectrogram and summed spectral energy difference
     f,s,Sxx = hammingSpect(dat.Z, fs = 20)
     rollSum = rollingSpecSum(Sxx, f, 3, 5, fs = 20)
@@ -71,13 +68,11 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     # set time to datetime
     behavClass.Time = pd.to_datetime('31/08/2018 ' + behavClass.Time, format = '%d/%m/%Y %H.%M.%S.%f')
 
-    # remove periods containing AT behaviour
+    # remove minute containing AT behaviour
     if behavClass.Behaviour.eq('AT').any():
         behAT = np.any([(dat.DT >= (x - pd.Timedelta(30,'sec'))) & (dat.DT <= (x + pd.Timedelta(30,'sec'))) for x in behavClass.Time[behavClass.index[behavClass.Behaviour == 'AT']].round("s").values], axis = 0)
 
         rollSum[behAT[(2*20):-(2*20)+1]] = min(rollSum)
-
-    
 
     tagData[re.search(r"(\d{5}?).txt",path.name).group(1)] = {'acc' : dat, 'beh' : behavClass}
 
