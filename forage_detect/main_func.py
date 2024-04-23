@@ -287,7 +287,7 @@ def accFeatures(acc, long_acc_name, passb, stopb, fs):
     _, dDV = lowEquiFilt(acc[long_acc_name[1]], passb, stopb, fs)
     _, dLat = lowEquiFilt(acc[long_acc_name[2]], passb, stopb, fs)
 
-    pitch = np.arcsin(np.clip(sLong,-1,1)) * 180/pi
+    pitch = np.arcsin(np.clip(sLong,-1,1)) * 180/np.pi
     Odba = sum([np.abs(dLong),np.abs(dDV),np.abs(dLat)])
 
     out = pd.DataFrame({'pitch':pitch,'ODBA':Odba})
@@ -354,7 +354,14 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
         List of length numPoints of ranges indicating indeces of highest values within sig.        
     """
     out = []
+    sigad = sig.copy()
     while len(out) != numPoints:
-        sig.index(max(sig))
+        # create index range around highest value
+        out.append([np.arange(np.argmax(sigad) - round(fs*window/2),
+                  np.argmax(sig) + round(fs*window/2))])
+        # reduce magnitude of this period and 5 minutes surrounding
+        sigad[np.arange(np.argmax(sigad) - round(fs*window/2) - (fs*60*5),
+                  np.argmax(sig) + round(fs*window/2)) + (fs*60*5)] = np.min(sigad)
+    return out
 
 # %%

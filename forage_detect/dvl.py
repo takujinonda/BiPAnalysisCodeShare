@@ -28,16 +28,17 @@ class DVL:
     # read in acceleration data
     self.dat = pd.read_table(self.filepath, skiprows=7, sep=',', usecols=[0,1,2])
     # remove header whitespace
-    self.dat.rename(columns=labmda x: x.strip(), inplace=True)
+    self.dat.rename(columns=lambda x: x.strip(), inplace=True)
     self.dat['DT'] = pd.date_range(self.accStart, periods=len(self.dat), freq='50ms')# add time series
     # select data within video range
-    self.dat = self.dat[(self.dat.DT >= vidStart) & (self.dat.DT < (vidStart + pd.Timedelta(hours=2)))]
+    self.dat = self.dat[(self.dat.DT >= self.vidStart) & (self.dat.DT < (self.vidStart + pd.Timedelta(hours=2)))]
     return
 
   def pitchcal(self):
     """
     Generate pitch values (clips acceleration values to [-1,1])
     """
+    self.pitch = pd.concat([self.dat.reset_index(), accFeatures(dat[['X','Y','Z']],['Y','Z','X'],1.5,3,20)], axis=1, inplace=True)
 
 # parent folder for all DVL data
 dvlFolders = "E:/My Drive/PhD/Data/2018Shearwater/DVL"
