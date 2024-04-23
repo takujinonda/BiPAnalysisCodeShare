@@ -9,7 +9,8 @@ import pandas as pd
 import re
 
 # parent folder for all DVL data
-dvlFolders = "E:/My Drive/PhD/Data/2018Shearwater/DVL"
+# dvlFolders = "E:/My Drive/PhD/Data/2018Shearwater/DVL"
+dvlFolders = "/Users/aran/Documents/DVL"
 
 # acc and vid starttimes
 st17008 = [pd.to_datetime('31/08/2018 06:00:00', format = "%d/%m/%Y %H:%M:%S"),
@@ -47,7 +48,8 @@ for path in Path(dvlFolders).rglob('*acc*.txt'):
     dat = dat[(dat.DT >= tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1]) & (dat.DT < tagInfo[re.search(r"(\d{5}?).txt",path.name).group(1)][1] + pd.Timedelta(hours=2))]
 
     # calculate pitch (clip array to min max of -1 1, assumes acceleration measured in g)
-    dat = pd.concat([dat.reset_index(), accFeatures(dat[['X','Y','Z']],['Y','Z','X'],1.5,3,20)], axis = 1, in)
+    dat = pd.concat([dat.reset_index(), accFeatures(dat[['X','Y','Z']],['Y','Z','X'],1.5,3,20)], axis = 1)
+
     
     # generate spectrogram and summed spectral energy difference
     f,s,Sxx = hammingSpect(dat.Z, fs = 20)
