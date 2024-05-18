@@ -4,7 +4,7 @@ import re
 from scipy import signal
 import numpy as np
 import pandas as pd
-import geopy.distance as distance
+# import geopy.distance as distance
 from scipy.signal import find_peaks
 
 from scipy import stats
@@ -371,8 +371,8 @@ def find_gaps(signal, gap_size):
     """
     adjacent_differences = [(y - x) for (x, y) in zip(signal[:-1], signal[1:])]
 
-def flap(sig,flapFreq=4):
-    """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the 
+def flap(sig,fs,flap_freq=4):
+    """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
     """
 
     peaks,_ = find_peaks(sig)
@@ -391,12 +391,16 @@ def flap(sig,flapFreq=4):
     pks,_ = find_peaks(-p[ppeaks[0]:ppeaks[1]])
 
     # retain only sufficiently large z displacements
-    flapInds = (sig[peaks].values - sig[troughs].values) > x[pks]
+    large_inds = (sig[peaks].values - sig[troughs].values) > x[pks]
+    # convert to flapping indeces (of acc signal)
+    flap_inds = np.sort(np.concatenate([peaks[large_inds],troughs[large_inds]]))
+    # find gaps between flap signals greater than twice the typical flapping frequency
+    flap_gap = np.array([x-y for x,y in zip(flap_inds[1:],flap_inds)]) > (2*fs/flap_freq)
 
     mask = np.zeros(len(sig))
 
 
-    return peaks[flapInds],troughs[flapInds]
+    return 
 
-def 
+
 # %%
