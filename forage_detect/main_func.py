@@ -4,7 +4,7 @@ import re
 from scipy import signal
 import numpy as np
 import pandas as pd
-import geopy.distance as distance
+# import geopy.distance as distance
 from scipy.signal import find_peaks
 
 from scipy import stats
@@ -398,5 +398,5 @@ def flap(sig,flapFreq=4):
 
     return peaks[flapInds],troughs[flapInds]
 
-def 
+
 # %%
