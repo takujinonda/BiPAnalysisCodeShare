@@ -5,6 +5,7 @@ from scipy import signal
 import numpy as np
 import pandas as pd
 import geopy.distance as distance
+from scipy.signal import find_peaks
 
 from scipy import stats
 
@@ -357,11 +358,45 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
     sigad = sig.copy()
     while len(out) != numPoints:
         # create index range around highest value
-        out.append([np.arange(np.argmax(sigad) - round(fs*window/2),
-                  np.argmax(sig) + round(fs*window/2))])
+        out.append([np.arange(np.argmax(sigad) - round(fs*window/2) + fs*2,
+                  np.argmax(sigad) + round(fs*window/2)) + fs*2])
         # reduce magnitude of this period and 5 minutes surrounding
-        sigad[np.arange(np.argmax(sigad) - round(fs*window/2) - (fs*60*5),
-                  np.argmax(sig) + round(fs*window/2)) + (fs*60*5)] = np.min(sigad)
+        sigad[np.arange(np.max([0,np.argmax(sigad) - round(fs*window/2) - (fs*60*minGap)]),np.min([len(sigad),np.argmax(sigad) + round(fs*window/2) + (fs*60*minGap)]))] = np.min(sigad)
     return out
 
+def find_gaps(signal, gap_size):
+    """Identify gaps in bool array `signal` greater than `gap_size` in length. Extend True segments to contain all elements contained within gap.
+
+    Returns bool array with fully extended True bouts.
+    """
+    adjacent_differences = [(y - x) for (x, y) in zip(signal[:-1], signal[1:])]
+
+def flap(sig,flapFreq=4):
+    """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the 
+    """
+
+    peaks,_ = find_peaks(sig)
+    troughs,_ = find_peaks(-sig)
+    if peaks[0] > troughs[0]:
+        peaks.pop(0)
+    if peaks[-1] > troughs[-1]:
+        peaks.pop(-1)
+
+    data = sig[peaks].values - sig[troughs].values
+    kde = stats.gaussian_kde(data)
+    x = np.linspace(data.min(), data.max(), 100)
+    p = kde(x)
+
+    ppeaks,_ = find_peaks(p)
+    pks,_ = find_peaks(-p[ppeaks[0]:ppeaks[1]])
+
+    # retain only sufficiently large z displacements
+    flapInds = (sig[peaks].values - sig[troughs].values) > x[pks]
+
+    mask = np.zeros(len(sig))
+
+
+    return peaks[flapInds],troughs[flapInds]
+
+def 
 # %%

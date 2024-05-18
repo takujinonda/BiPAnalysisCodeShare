@@ -30,7 +30,7 @@
    3. [ ] Ignore data where duration $< 120$ minutes
    4. [ ] Find indeces of 20 one minute periods where $i_f$ is largest minimum of 5 minutes apart
 4. [ ] Extract typical flight thresholds
-   1. [ ] Find peaks / troughs and ensure signal starts with a peak (for difference calculation)
+   1. [x] Find peaks / troughs and ensure signal starts with a peak (for difference calculation)
    2. [ ] Find overlap of flapping with estimated flight periods
    3. [ ] Calculate interpeak difference, $\Delta_z$
    4. [ ] Repeat interpeak difference calculation for pitch $\Delta_p$
