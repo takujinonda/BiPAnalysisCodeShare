@@ -1,12 +1,11 @@
 #%%
 import re
-
-from scipy import signal
 import numpy as np
 import pandas as pd
-# import geopy.distance as distance
-from scipy.signal import find_peaks
 
+from scipy import signal
+from itertools import compress
+from scipy.signal import find_peaks
 from scipy import stats
 
 def readAxyGPS(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S"): 
@@ -367,12 +366,30 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
 def find_gaps(signal, gap_size):
     """Identify gaps in bool array `signal` greater than `gap_size` in length. Extend True segments to contain all elements contained within gap.
 
-    Returns bool array with fully extended True bouts.
+    Returns arrays of start and end points.
     """
-    adjacent_differences = [(y - x) for (x, y) in zip(signal[:-1], signal[1:])]
+    past_threshold = np.array([x-y for x, y in zip(signal[1:],signal)]) > gap_size
+    past_threshold = np.array(list(compress(range(len(past_threshold)),past_threshold)))
+    # ends = past_threshold.append(len(flapInds))
+    ends = np.append(past_threshold,(len(signal)-1))
+    starts = np.insert(past_threshold + 1,0,0)
+    # mask = np.zeros(ends[-1]).astype(int)
+    # for x,y in zip(starts,ends):
+    #     mask[x:y] = 1
+    return signal[starts],signal[ends]
 
-def flap(sig,fs,flap_freq=4):
+def flap(sig,fs,bout_gap=10,flap_freq=4):
     """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
+
+    Args:
+        sig         - 
+        fs          - 
+        flap_freq   - 
+        bout_gap    - 
+
+
+    Returns:
+    Two arrays of equal length as `sig`, one of flapping sequences `flap_mask` and another of flapping bouts `flap_bouts` (flap 1, not 0).
     """
 
     peaks,_ = find_peaks(sig)
@@ -395,12 +412,17 @@ def flap(sig,fs,flap_freq=4):
     # convert to flapping indeces (of acc signal)
     flap_inds = np.sort(np.concatenate([peaks[large_inds],troughs[large_inds]]))
     # find gaps between flap signals greater than twice the typical flapping frequency
-    flap_gap = np.array([x-y for x,y in zip(flap_inds[1:],flap_inds)]) > (2*fs/flap_freq)
-
-    mask = np.zeros(len(sig))
-
-
-    return 
+    flap_mask = np.zeros(len(sig))
+    start,end = find_gaps(flap_inds,2*fs/flap_freq)
+    for x,y in zip(start,end):
+        flap_mask[x:y] = 1
+    
+    flap_inds = np.array([i for i, x in enumerate(flap_mask) if x == 1])
+    starts,ends = find_gaps(flap_inds, fs*bout_gap)
+    flap_bouts = np.zeros(len(sig))
+    for x,y in zip(starts,ends):
+        flap_bouts[x:y] = 1
+    return flap_mask, flap_bouts
 
 
 # %%
