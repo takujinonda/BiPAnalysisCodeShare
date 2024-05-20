@@ -290,9 +290,10 @@ def accFeatures(acc, long_acc_name, passb, stopb, fs):
     pitch = np.arcsin(np.clip(sLong,-1,1)) * 180/np.pi
     Odba = sum([np.abs(dLong),np.abs(dDV),np.abs(dLat)])
 
-    out = pd.DataFrame({'pitch':pitch,'ODBA':Odba})
-    out['pitmn'] = out.pitch.rolling(10*fs, closed = "both", min_periods = 1).mean()
-    out['ODmn'] = out.ODBA.rolling(10*fs, closed = "both", min_periods = 1).mean()
+    out = pd.DataFrame({'pitch':pitch,'ODBA':Odba,'surge':dLong})
+    out['pitmn'] = out.pitch.rolling(10*fs, closed="both", min_periods=1).mean()
+    out['ODmn'] = out.ODBA.rolling(10*fs, closed="both", min_periods=1).mean()
+    out['movsg'] = out.surge.rolling(2*fs, closed="both", min_periods=1).var()
 
     return out
 
@@ -339,6 +340,27 @@ def rollingSpecSum(spec,f,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
         spectDiff = pd.Series(np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
     return spectDiff.rolling(dur*fs, closed = "both", min_periods = 1).sum()
 
+def reduceErroneous(signal,behav_data,dt,fs,gap=30,cat='AT'):
+    """Reduce the magnitude of erroneous periods of data `signal` according to behaviour data `behav_data`. Surrounding `gap` seconds are reduce of the time period of concern.
+
+    Args:
+        signal      - Signal for which erroneous periods should have their magnitude reduced
+        behav       - Behavioural data with classification `cat` for erroneous data
+        dt          - datetime array of signal
+        fs          - `signal` sampling frequency
+        gap         - window over which to reduce magnitude (in seconds)
+        cat         - behav category to indicate erroneous periods, defaults to 'AT'
+
+    Returns:
+    `out`, array of same size as `signal`, now with segments of reduced magnitude where `behav_data` indicated erroneous behaviour
+    """
+    if not behav_data.Behaviour.eq(cat).any():
+        print("No erroneous data found")
+    else:
+        behAT = np.any([(DT >= (x - pd.Timedelta(gap,'sec'))) & (DT <= (x + pd.Timedelta(gap,'sec'))) for x in behav_data.Time[behav_data.index[behav_data.Behaviour == cat]].round("s").values], axis = 0)
+        signal[behAT[(2*fs):-(2*fs)+1]] = min(signal)
+        return signal
+
 def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
     """
     Calculate the highest values across time-series signal `sig` with a minimum time gap between
@@ -363,6 +385,16 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
         sigad[np.arange(np.max([0,np.argmax(sigad) - round(fs*window/2) - (fs*60*minGap)]),np.min([len(sigad),np.argmax(sigad) + round(fs*window/2) + (fs*60*minGap)]))] = np.min(sigad)
     return out
 
+def flightestimate(signal,fs,behav_data=None,dt=None,gap=30,cat='AT',low=3,high=5,removeErr=True,window=60,minGap=5,numPoints=20):
+    """Estimate flight periods from dorsoventral acceleration. Flight is estimated by comparing frequencies within the `low` to `high` domain to `high`+. If `removeErr` is True, remove erroneous periods within a `gap`. The `numPoints` most likely `window` second periods of flight are extracted with at least `minGap` minutes inbetween.
+    """
+    f,s,Sxx = hammingSpect(signal,fs)
+    rollSum = rollingSpecSum(Sxx, f, low, high, fs)
+    if removeErr:
+        rollSum = reduceErroneous(signal,behav_data,dt,fs,gap,cat)
+    out = maxWithGap(rollSum,fs,window,minGap,numPoints)
+    return out
+
 def find_gaps(signal, gap_size):
     """Identify gaps in bool array `signal` greater than `gap_size` in length. Extend True segments to contain all elements contained within gap.
 
@@ -378,6 +410,29 @@ def find_gaps(signal, gap_size):
     #     mask[x:y] = 1
     return signal[starts],signal[ends]
 
+def peak_trough(sig):
+    """Extract peaks and troughs of signal `sig`. Will start with peak and end in trough to ensure equal size
+    """
+    peaks,_ = find_peaks(sig)
+    troughs,_ = find_peaks(-sig)
+    if peaks[0] > troughs[0]:
+        peaks.pop(0)
+    if peaks[-1] > troughs[-1]:
+        peaks.pop(-1)
+    return peaks, troughs
+
+def interpeaktrough(mags):
+    """Find the inter-peak trough of signal `mags`. Only the first two peaks are considered
+    """
+    kde = stats.gaussian_kde(mags)
+    x = np.linspace(data.min(),data.max(),100)
+    p = kde(x)
+
+    ppeaks,_ = find_peaks(p)
+    pks,_ = find_peaks(-p[ppeaks[0]:ppeaks[1]])
+
+    return x[pks]
+
 def flap(sig,fs,bout_gap=10,flap_freq=4):
     """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
 
@@ -392,23 +447,12 @@ def flap(sig,fs,bout_gap=10,flap_freq=4):
     Two arrays of equal length as `sig`, one of flapping sequences `flap_mask` and another of flapping bouts `flap_bouts` (flap 1, not 0).
     """
 
-    peaks,_ = find_peaks(sig)
-    troughs,_ = find_peaks(-sig)
-    if peaks[0] > troughs[0]:
-        peaks.pop(0)
-    if peaks[-1] > troughs[-1]:
-        peaks.pop(-1)
-
+    peaks,troughs = peak_trough(sig)
     data = sig[peaks].values - sig[troughs].values
-    kde = stats.gaussian_kde(data)
-    x = np.linspace(data.min(), data.max(), 100)
-    p = kde(x)
-
-    ppeaks,_ = find_peaks(p)
-    pks,_ = find_peaks(-p[ppeaks[0]:ppeaks[1]])
-
+    ipt = interpeaktrough(data)
+    
     # retain only sufficiently large z displacements
-    large_inds = (sig[peaks].values - sig[troughs].values) > x[pks]
+    large_inds = (sig[peaks].values - sig[troughs].values) > ipt
     # convert to flapping indeces (of acc signal)
     flap_inds = np.sort(np.concatenate([peaks[large_inds],troughs[large_inds]]))
     # find gaps between flap signals greater than twice the typical flapping frequency
