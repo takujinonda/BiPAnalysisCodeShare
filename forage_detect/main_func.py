@@ -397,7 +397,7 @@ def flightestimate(signal,fs,behav_data=None,dt=None,gap=30,cat='AT',low=3,high=
     flight = np.zeros(len(signal))
     for x in out:
         flight[x] = 1
-    return flight.astype(int)
+    return out, flight.astype(int)
 
 def find_gaps(signal, gap_size):
     """Identify gaps in bool array `signal` greater than `gap_size` in length. Extend True segments to contain all elements contained within gap.
@@ -458,7 +458,8 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,behav_data=
 
     if find_in_flight_periods:
         _,_,flap_sig = peak_trough(sig)
-        tst = flap_sig + flightestimate(sig,20,behav_data=behav_data,dt=dt,numPoints=numPoints)
+        _, flinds = flightestimate(sig,20,behav_data=behav_data,dt=dt,numPoints=numPoints)
+        tst = flap_sig + flinds
         peaks = np.where(tst == 2)[0]
         troughs = np.where(tst == 4)[0]
     else:
@@ -485,5 +486,9 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,behav_data=
         flap_bouts[x:y] = 1
     return flap_mask.astype(int), flap_bouts.astype(int)
 
-
+def flight_pitch_changes(sig,fl_inds):
+    _, _, pit_sig = peak_trough(sig)
+    # find overlap with flights
+    fl_pit_pk = np.where(pit_sig + fl_inds == 2)
+    fl_pit_trgh = np.where(pit_sig + fl_inds == 2)
 # %%
