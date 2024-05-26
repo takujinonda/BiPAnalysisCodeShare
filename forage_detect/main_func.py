@@ -8,7 +8,7 @@ from itertools import compress
 from scipy.signal import find_peaks
 from scipy import stats
 
-def readAxyGPS(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S"): 
+def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S", ): 
     """
     Read in AxyTrek GPS data (txt files) as output by X Manager
 
@@ -22,14 +22,33 @@ def readAxyGPS(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %
         Pandas dataframe of columns `colnames`. A formatted DateTime column (named DT) is generated.
     """
 
-    colnames = ['Date', 'Time', 'lat', 'lon']
+    accCols = ['Timestamp','X','Y','Z']
+    gpsCols = ['Timestamp','location-lat','location-lon']
 
-
-    df = pd.read_csv(filename, sep = delim, usecols = cols,
-    names = colnames)
+    # read in based on requested columns
+    if cols.lower() == 'gps':
+        df = pd.read_csv(filename, sep = ",", header = 0, usecols = gpsCols)
+    elif cols.lower() == 'acc':
+        df = pd.read_csv(filename, sep = ",", header = 0, usecols = accCols)
+    else:
+        df = pd.read_csv(filename, sep = ",", header = 0)
+    df = pd.read_csv(filename, sep = delim, usecols = cols)
     df.DT = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
     df['DT'] = pd.to_datetime(df['Date'] + " " + df['Time'], format = datetimeFormat)
     return df
+
+def readDVL(filename,accStart=None,vidStart=None,removePriorVid=False):
+    """
+    Read Little Leonardo DVL data logger (400M) data. File locations and start-times of acceleration and video recording (dd/mm/yyyy HH:MM:SS) required.
+    """
+    # read in acceleration data
+    acc = pd.read_table(filename, skiprows=7, sep=',', usecols=[0,1,2])
+    # remove header whitespace
+    acc.rename(columns=lambda x: x.strip(), inplace=True)
+    acc['DT'] = pd.date_range(accStart, periods=len(acc), freq=f"{1/self.fs * 10**3}ms")# add time series
+    if removePriorVid:
+        # select data within video range
+        acc = acc[(acc.DT >= vidStart) & (acc.DT < (vidStart + pd.Timedelta(hours=2)))]
 
 def readBIP(filename,cols=None):
     """

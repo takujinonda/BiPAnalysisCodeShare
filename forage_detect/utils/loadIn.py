@@ -31,7 +31,7 @@ def dtFormat(x):
 
     return out
 
-def readAxyGPS(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S"): 
+def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S", ): 
     """
     Read in AxyTrek GPS data (txt files) as output by X Manager
 
@@ -45,11 +45,17 @@ def readAxyGPS(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %
         Pandas dataframe of columns `colnames`. A formatted DateTime column (named DT) is generated.
     """
 
-    colnames = ['Date', 'Time', 'lat', 'lon']
+    accCols = ['Timestamp','X','Y','Z']
+    gpsCols = ['Timestamp','location-lat','location-lon']
 
-
-    df = pd.read_csv(filename, sep = delim, usecols = cols,
-    names = colnames)
+    # read in based on requested columns
+    if cols.lower() == 'gps':
+        df = pd.read_csv(filename, sep = ",", header = 0, usecols = gpsCols)
+    elif cols.lower() == 'acc':
+        df = pd.read_csv(filename, sep = ",", header = 0, usecols = accCols)
+    else:
+        df = pd.read_csv(filename, sep = ",", header = 0)
+    df = pd.read_csv(filename, sep = delim, usecols = cols)
     df.DT = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
     df['DT'] = pd.to_datetime(df['Date'] + " " + df['Time'], format = datetimeFormat)
     return df
@@ -87,9 +93,12 @@ def readBIP(filename,cols=None):
 
     return df
 
-def readDVL(file, fs, accStart, vidStart, vidOnlyPeriod = True):
+def readDVL(filename,accStart,fs,vidStart=None,vidOnlyPeriod=False):
+    """
+    Read Little Leonardo DVL data logger (400M) data. File locations and start-times of acceleration and video recording (dd/mm/yyyy HH:MM:SS) required.
+    """
     # read in acceleration data
-    dat = pd.read_table(file, skiprows = 7, sep = ',', usecols = [0,1,2])
+    dat = pd.read_table(filename, skiprows = 7, sep = ',', usecols = [0,1,2])
 
     # remove whitespace from headers
     dat.rename(columns=lambda x: x.strip(), inplace = True)
