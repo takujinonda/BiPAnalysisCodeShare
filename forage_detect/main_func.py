@@ -360,7 +360,7 @@ def reduceErroneous(signal,behav_data,dt,fs,gap=30,cat='AT'):
     else:
         behAT = np.any([(dt >= (x - pd.Timedelta(gap,'sec'))) & (dt <= (x + pd.Timedelta(gap,'sec'))) for x in behav_data.Time[behav_data.index[behav_data.Behaviour == cat]].round("s").values], axis = 0)
         sigad.loc[behAT[(2*fs):-(2*fs)+1]] = min(sigad)
-        return sigad
+    return sigad
 
 def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
     """

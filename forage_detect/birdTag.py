@@ -1,6 +1,11 @@
 from pathlib import Path
 # bring in functions from main_func
-from forage_detect.main_func import *
+# from forage_detect.main_func import *
+# bring in functions from utils
+import utils.analyseAcc as accFn
+import utils.analyseGPS as gpsFn
+import utils.DVLutils as dvlFn
+import utils.loadIn as load
 from math import pi
 
 import pandas as pd
@@ -22,29 +27,11 @@ class birdTag:
         self.tagname = tagname
         self.fs = fs
 
-    def readAxyGPS(self, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S"): 
-        """
-        Read in AxyTrek GPS data (txt files) as output by X Manager
+    def readin(self):
+        if self.type == 'Axy':
+            self.gps = gpsFn.readAxyGPS
 
-        Args:
-
-            filename:   path to AxyTrek txt file
-            cols:       string to denote if acceleration and GPS ('acc') or GPS only ('gps') should be read in
-            colnames:   list of string column names to be assigned. Must be of same length as cols. Defaults to ['Date', 'Time', 'lat', 'lon']
-
-        Returns:
-            Pandas dataframe of columns `colnames`. A formatted DateTime column (named DT) is generated.
-        """
-
-        colnames = ['Date', 'Time', 'lat', 'lon']
-
-
-        df = pd.read_csv(self.filename, sep = delim, usecols = cols,
-        names = colnames)
-        df.DT = [self.dtFormat(x) for x in df.DT] # ensure correct datetime formats
-        df['DT'] = pd.to_datetime(df['Date'] + " " + df['Time'], format = datetimeFormat)
-        df.rename(columns={'Date':'date','Time':'time','DT':'dt'},inplace=True) # standardise columns
-        self.gps = df
+    self.gps = load.readAxyGPS(self, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S")
     
     def readInAxyCSV(self,sep='\t',cols=None):
         if cols is None:
@@ -298,7 +285,7 @@ class birdTag:
         return static, dynamic
 
     # create static and dynamic (1 pass, 1.5 stop), pitch, ODBA
-    def accFeatures(self, passb, stopb):
+    def accFeatures(self, long_acc_name, passb, stopb):
         """
         Generate acceleration features (pitch, ODBA, and their 10 second moving means)
 
@@ -314,17 +301,18 @@ class birdTag:
         """
 
         # take acceleration signal names
-        self.acc.sZ, self.acc.dZ = lowEquiFilt(self.acc.Z, passb, stopb, fs)
-        self.acc.sX, self.acc.dX = lowEquiFilt(self.acc.X, passb, stopb, fs)
-        self.acc.sY, self.acc.dY = lowEquiFilt(self.acc.Y, passb, stopb, fs)
+        self.acc.sX, self.acc.dX = lowEquiFilt(self.acc.[long_acc_name[0]], passb, stopb, self.fs)
+        self.acc.sZ, self.acc.dZ = lowEquiFilt(self.acc.[long_acc_name[1]], passb, stopb, self.fs)
+        self.acc.sY, self.acc.dY = lowEquiFilt(self.acc.[long_acc_name[2]], passb, stopb, self.fs)
 
-        self.acc.pitch = np.arcsin(np.clip(sLong,-1,1)) * 180/np.pi
+        self.acc.pitch = np.arcsin(np.clip(self.acc.sX,-1,1)) * 180/np.pi
         self.acc.ODBA = sum([np.abs(self.acc.dZ),np.abs(self.acc.dX),np.abs(self.acc.dY)])
 
         self.acc.pitmn = self.acc.pitch.rolling(10*self.fs, closed = "both", min_periods = 1).mean()
         self.acc.ODmn = self.acc.ODBA.rolling(10*self.fs, closed = "both", min_periods = 1).mean()
+        self.acc.movsg = self.dX.rolling(2*fs, closed='both', min_periods=1).var()
 
-    def hammingSpect(self,sig):
+    def hammingSpect(self,sig,window):
         """
         Generate spectrogram data of sig using a Hamming window of 4 seconds with 85% overlap.
         
@@ -336,7 +324,7 @@ class birdTag:
         # generate spectrogram (4 second window, overlap of 85%, hamming window)
 
         #set window size of 4 seconds
-        winsize = self.fs*4
+        winsize = self.fs*window
         #set overlap between windows (will determine the temporal resolution
         numoverlap = np.floor(.9875*winsize).astype(int); #(85%)
         win = signal.windows.hamming(winsize);
