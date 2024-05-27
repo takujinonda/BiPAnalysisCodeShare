@@ -4,6 +4,8 @@ import pandas as pd
 from scipy.signal import find_peaks, remez, filtfilt, spectrogram
 from scipy.signal.windows import hamming
 from scipy import stats
+from itertools import compress
+from statistics import median
 
 def lowEquiFilt(sig, passband, stopband, fs):
     """
@@ -54,7 +56,7 @@ def accFeatures(acc, long_acc_name, passb, stopb, fs):
     out = pd.DataFrame({'pitch':pitch,'ODBA':Odba,'surge':dLong,'DZ':dZ})
     out['pitmn'] = out.pitch.rolling(10*fs, closed="both", min_periods=1).mean()
     out['ODmn'] = out.ODBA.rolling(10*fs, closed="both", min_periods=1).mean()
-    out['movsg'] = out.surge.rolling(2*fs, closed="both", min_periods=1).var()
+    # out['movsg'] = out.surge.rolling(2*fs, closed="both", min_periods=1).var()
 
     return out
 
@@ -179,10 +181,11 @@ def peak_trough(sig):
     """
     peaks,_ = find_peaks(sig)
     troughs,_ = find_peaks(-sig)
-    if peaks[0] > troughs[0]:
-        peaks = np.delete(peaks,0)
-    if peaks[-1] > troughs[-1]:
-        peaks = np.delete(peaks,-1)
+    while len(peaks) != len(troughs):
+        if peaks[0] > troughs[0]:
+            troughs = np.delete(troughs,0)
+        if peaks[-1] > troughs[-1]:
+            peaks = np.delete(peaks,-1)
 
     # create alternative of bool array indicating presence/absence of peaks (1) and troughs (2)
     flap_sig = np.zeros(len(sig))
@@ -202,6 +205,30 @@ def interpeaktrough(mags):
 
     return x[pks]
 
+def flatten(xss):
+    return [x for xs in xss for x in xs]
+
+
+def peak_trough_in_flight(sig,fl_inds):
+    """Identify peaks/troughs of signal `sig` within defined flight periods `fl_inds`
+    """
+
+    peaks,troughs,_ = peak_trough(sig)
+    flpeaks = []
+    fltroughs = []
+    for inds in fl_inds:
+        pks = np.sort(list(set(peaks).intersection(inds)))
+        trghs = np.sort(list(set(troughs).intersection(inds)))
+        if pks[0] > trghs[0]:
+            trghs = np.delete(trghs,0)
+        if pks[-1] > trghs[-1]:
+            pks = np.delete(pks,-1)
+        flpeaks.append(pks)
+        fltroughs.append(trghs)
+    peaks = flatten(flpeaks)
+    troughs = flatten(fltroughs)
+    return peaks, troughs
+
 def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None):
     """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
 
@@ -217,19 +244,16 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None
     """
 
     if find_in_flight_periods:
-        _,_,flap_sig = peak_trough(sig)
-        tst = flap_sig + flinds
-        peaks = np.where(tst == 2)[0]
-        troughs = np.where(tst == 4)[0]
+        peaks,troughs = peak_trough_in_flight(sig,flinds)
     else:
         peaks,troughs,_ = peak_trough(sig)
-    data = sig[peaks].values - sig[troughs].values
+    data = np.absolute(sig[peaks].values - sig[troughs].values)
     ipt = interpeaktrough(data)
     
     # if only using estimated flight periods, recalculate peaks and troughs
     peaks,troughs,_ = peak_trough(sig)
     # retain only sufficiently large z displacements
-    large_inds = (sig[peaks].values - sig[troughs].values) > ipt
+    large_inds = np.absolute(sig[peaks].values - sig[troughs].values) > ipt
     # convert to flapping indeces (of acc signal)
     flap_inds = np.sort(np.concatenate([peaks[large_inds],troughs[large_inds]]))
     # find gaps between flap signals greater than twice the typical flapping frequency
@@ -245,8 +269,14 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None
         flap_bouts[x:y] = 1
     return flap_mask.astype(int), flap_bouts.astype(int)
 
-def flight_pitch_changes(sig,fl_inds):
-    _, _, pit_sig = peak_trough(sig)
-    # find overlap with flights
-    fl_pit_pk = np.where(pit_sig + fl_inds == 2)
-    fl_pit_trgh = np.where(pit_sig + fl_inds == 2)
+def flight_pitch_changes(sig,fl_inds,findVal=None):
+    outs = []
+    for x in fl_inds:
+        pk,trgh,_ = peak_trough(sig[x])
+        pk = x[pk]
+        trgh = x[trgh]
+        if findVal == 'max':
+            outs.append(np.max(np.array(sig[pk]) - np.array(sig[trgh])))
+        elif findVal == 'min':
+            outs.append(np.min(np.array(sig[pk]) - np.array(sig[trgh])))
+    return median(outs)
