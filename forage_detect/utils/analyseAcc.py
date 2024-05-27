@@ -79,7 +79,7 @@ def hammingSpect(sig,fs=25):
 
     return f, t, Sxx
 
-def rollingSpecSum(spec,f,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
+def rollingSpecSum(sig,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
     """
     Create a rolling sum of the difference between spectrogram intensities from minFreq to maxFreq and intensities above maxFreq, , i.e. summed values between 3 and 5 Hz - summed values above 5 Hz.
     
@@ -95,6 +95,7 @@ def rollingSpecSum(spec,f,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
     Returns:
         Summed frequency intensities across spec object.
     """
+    f,_,spec = hammingSpect(sig,fs)
     if inclusive:
         spectDiff = pd.Series(np.sum(spec[(f >= minFreq) & (f <= maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
     else:
@@ -125,11 +126,31 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
         sigad[np.arange(np.max([0,np.argmax(sigad) - round(fs*window/2) - (fs*60*minGap)]),np.min([len(sigad),np.argmax(sigad) + round(fs*window/2) + (fs*60*minGap)]))] = np.min(sigad)
     return out
 
-def flightestimate(signal,fs,behav_data=None,dt=None,gap=30,cat='AT',low=3,high=5,removeErr=False,window=60,minGap=5,numPoints=20):
+def reduceErroneous(signal,behav_data,dt,fs,gap=30,cat='AT'):
+    """Reduce the magnitude of erroneous periods of data `signal` according to behaviour data `behav_data`. Surrounding `gap` seconds are reduce of the time period of concern.
+
+    Args:
+        signal      - Signal for which erroneous periods should have their magnitude reduced
+        behav       - Behavioural data with classification `cat` for erroneous data
+        dt          - datetime array of signal
+        fs          - `signal` sampling frequency
+        gap         - window over which to reduce magnitude (in seconds)
+        cat         - behav category to indicate erroneous periods, defaults to 'AT'
+
+    Returns:
+    `out`, array of same size as `signal`, now with segments of reduced magnitude where `behav_data` indicated erroneous behaviour
+    """
+    sigad = signal.copy()
+    if not behav_data.Behaviour.eq(cat).any():
+        print("No erroneous data found")
+    else:
+        behAT = np.any([(dt >= (x - pd.Timedelta(gap,'sec'))) & (dt <= (x + pd.Timedelta(gap,'sec'))) for x in behav_data.Time[behav_data.index[behav_data.Behaviour == cat]].round("s").values], axis = 0)
+        sigad.loc[behAT[(2*fs):-(2*fs)+1]] = min(sigad)
+    return sigad
+
+def flightestimate(signal,rollSum,fs,behav_data=None,dt=None,gap=30,cat='AT',removeErr=False,window=60,minGap=5,numPoints=20):
     """Estimate flight periods from dorsoventral acceleration. Flight is estimated by comparing frequencies within the `low` to `high` domain to `high`+. If `removeErr` is True, remove erroneous periods within a `gap`. The `numPoints` most likely `window` second periods of flight are extracted with at least `minGap` minutes inbetween.
     """
-    f,_,Sxx = hammingSpect(signal,fs)
-    rollSum = rollingSpecSum(Sxx, f, low, high, fs)
     if removeErr:
         rollSum = reduceErroneous(rollSum,behav_data,dt,fs,gap,cat)
     out = maxWithGap(rollSum,fs,window,minGap,numPoints)
@@ -181,7 +202,7 @@ def interpeaktrough(mags):
 
     return x[pks]
 
-def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None,behav_data=None,dt=None,numPoints=10):
+def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None):
     """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
 
     Args:
@@ -223,3 +244,9 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None
     for x,y in zip(starts,ends):
         flap_bouts[x:y] = 1
     return flap_mask.astype(int), flap_bouts.astype(int)
+
+def flight_pitch_changes(sig,fl_inds):
+    _, _, pit_sig = peak_trough(sig)
+    # find overlap with flights
+    fl_pit_pk = np.where(pit_sig + fl_inds == 2)
+    fl_pit_trgh = np.where(pit_sig + fl_inds == 2)

@@ -97,6 +97,7 @@ def readDVL(filename,accStart,fs,vidStart=None,vidOnlyPeriod=False):
     """
     Read Little Leonardo DVL data logger (400M) data. File locations and start-times of acceleration and video recording (dd/mm/yyyy HH:MM:SS) required.
     """
+    accSt = pd.to_datetime(accStart)
     # read in acceleration data
     dat = pd.read_table(filename, skiprows = 7, sep = ',', usecols = [0,1,2])
 

@@ -21,25 +21,66 @@ class birdTag:
     Pitch calculation.
     Data removal from proximity to location.
     """
-    def __init__(self,filepath,type,tagname,fs,accStart=None,vidStart=None):
+    def __init__(self,filepath,type,tagname,accfs,gpsfpm=None,accStart=None,vidStart=None):
         self.filepath = filepath
         self.type = type
         self.tagname = tagname
-        self.fs = fs
+        self.accfs = accfs
+        self.gpsfpm = gpsfpm
         self.accStart = accStart
         self.vidStart = vidStart
 
     def readin(self):
-        if self.type == 'Axy':
+        if self.type.lower() == 'axy':
             self.gps = load.readAxy(self.filepath,cols='gps')
             self.acc = load.readAxy(self.filepath,cols='acc')
-        elif self.type == 'BiP':
+        elif self.type.lower() == 'bip':
             self.gps = load.readBiP(self.filepath,col='gps')
             self.acc = load.readBiP(self.filepath,col='acc')
-        elif self.type == 'DVL':
-            self.acc = load.readDVL(self.filepath, accStart=self.accStart, fs=self.fs, vidStart=self.vidStart)
+        elif self.type.lower() == 'dvl':
+            self.acc = load.readDVL(self.filepath, accStart=self.accStart, fs=self.accfs, vidStart=self.vidStart)
 
-   
+    def readBeh(self,behavPath):
+        self.dvl_beh = dvlFn.readBeh(behavPath)
+
+    def accFeatures(self,passband=1.5,stopband=3):
+        # check if data read in
+        if not hasattr(self, 'acc'):
+            print("No acceleration data present")
+        else:
+            self.acc.append(accFn.accFeatures(self.acc,self.long_acc_name,passband,stopband,self.accfs))
+
+    def rollSum(self,minfreq=3,maxfreq=5):
+        self.rollSum = accFn.rollingSpecSum(self.acc.Z,minFreq=minfreq,maxFreq=maxfreq,fs=self.accfs,dur=60,inclusive=False)
+
+    def flight_est(self,removeErr=True):
+        # check if rollSum calculation has been performed
+        if not hasattr(self, 'rollSum'):
+            print("Performing spectral rolling sum")
+            self.rollSum()
+        
+        # if dvl tag, reduce magnitude of erroneous category
+        if self.type.lower() == 'dvl' & removeErr:
+            self.flInds, self.flight = accFn.flightestimate(signal=self.acc.Z,rollSum=self.rollSum,fs=self.accfs,behav_data=self.dvl_beh,dt=self.acc.DT,removeErr=removeErr)
+        else:
+            self.flInds, self.flight = accFn.flightestimate(signal=self.acc.Z,rollSum=self.rollSum,fs=self.accfs,dt=self.acc.DT)
+
+    def flapping(self):
+        """Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq` and `bout_gap` seconds, respectively. If the tag is DVL, flapping peaks/troughs will be found within estimate flight periods. This function requires a flight mask to be present.
+        """
+
+        if not hasattr(self, 'flight') & self.type.lower() == 'dvl':
+            print("Add estimated flight periods")
+        
+        if self.type.lower() == 'dvl':
+            self.flap, self.flap_bouts = accFn.flap(sig = self.acc.Z, fs = self.accfs, bout_gap = 10, flap_freq = 4,find_in_flight_periods=True,flinds=self.flight)
+        else:
+            self.flap, self.flap_bouts = accFn.flap(sig = self.acc.Z, fs = self.accfs, bout_gap = 10, flap_freq = 4)
+
+    def pitchPT(self):
+        """Calculate pitch thresholds from estimated flight periods
+        """
+        
     # def readInAxyCSV(self,sep='\t',cols=None):
     #     if cols is None:
     #         cols = ['TagID','Timestamp','X','Y','Z','location-lat','location-lon']
@@ -90,7 +131,7 @@ class birdTag:
     #     self.acc = pd.read_table(self.filepath, skiprows=7, sep=',', usecols=[0,1,2])
     #     # remove header whitespace
     #     self.acc.rename(columns=lambda x: x.strip(), inplace=True)
-    #     self.dat['DT'] = pd.date_range(accStart, periods=len(self.dat), freq=f"{1/self.fs * 10**3}ms")# add time series
+    #     self.dat['DT'] = pd.date_range(accStart, periods=len(self.dat), freq=f"{1/self.accfs * 10**3}ms")# add time series
     #     if removePriorVid:
     #         # select data within video range
     #         self.dat = self.dat[(self.dat.DT >= vidStart) & (self.dat.DT < (vidStart + pd.Timedelta(hours=2)))]
@@ -283,7 +324,7 @@ class birdTag:
     #         `static`, the low pass filtered signal, and `dynamic`, the difference between the original signal and `static`. Both are arrays of same length as sig
     #     """
     #     # generate equiripple filter
-    #     eqFil=signal.remez(101,[0,passband,stopband,fs*.5],[1,0],fs=self.fs)
+    #     eqFil=signal.remez(101,[0,passband,stopband,fs*.5],[1,0],fs=self.accfs)
     #     # return 'static' signals for each provided signal
     #     static = signal.filtfilt(b=eqFil,a=1,x=sig)
     #     # return 'dynamic' acceleration signal
@@ -308,15 +349,15 @@ class birdTag:
     #     """
 
     #     # take acceleration signal names
-    #     self.acc.sX, self.acc.dX = lowEquiFilt(self.acc.[long_acc_name[0]], passb, stopb, self.fs)
-    #     self.acc.sZ, self.acc.dZ = lowEquiFilt(self.acc.[long_acc_name[1]], passb, stopb, self.fs)
-    #     self.acc.sY, self.acc.dY = lowEquiFilt(self.acc.[long_acc_name[2]], passb, stopb, self.fs)
+    #     self.acc.sX, self.acc.dX = lowEquiFilt(self.acc.[long_acc_name[0]], passb, stopb, self.accfs)
+    #     self.acc.sZ, self.acc.dZ = lowEquiFilt(self.acc.[long_acc_name[1]], passb, stopb, self.accfs)
+    #     self.acc.sY, self.acc.dY = lowEquiFilt(self.acc.[long_acc_name[2]], passb, stopb, self.accfs)
 
     #     self.acc.pitch = np.arcsin(np.clip(self.acc.sX,-1,1)) * 180/np.pi
     #     self.acc.ODBA = sum([np.abs(self.acc.dZ),np.abs(self.acc.dX),np.abs(self.acc.dY)])
 
-    #     self.acc.pitmn = self.acc.pitch.rolling(10*self.fs, closed = "both", min_periods = 1).mean()
-    #     self.acc.ODmn = self.acc.ODBA.rolling(10*self.fs, closed = "both", min_periods = 1).mean()
+    #     self.acc.pitmn = self.acc.pitch.rolling(10*self.accfs, closed = "both", min_periods = 1).mean()
+    #     self.acc.ODmn = self.acc.ODBA.rolling(10*self.accfs, closed = "both", min_periods = 1).mean()
     #     self.acc.movsg = self.dX.rolling(2*fs, closed='both', min_periods=1).var()
 
     # def hammingSpect(self,sig,window):
@@ -331,12 +372,12 @@ class birdTag:
     #     # generate spectrogram (4 second window, overlap of 85%, hamming window)
 
     #     #set window size of 4 seconds
-    #     winsize = self.fs*window
+    #     winsize = self.accfs*window
     #     #set overlap between windows (will determine the temporal resolution
     #     numoverlap = np.floor(.9875*winsize).astype(int); #(85%)
     #     win = signal.windows.hamming(winsize);
 
-    #     f, t, Sxx = signal.spectrogram(sig,self.fs,window=win,noverlap=numoverlap)
+    #     f, t, Sxx = signal.spectrogram(sig,self.accfs,window=win,noverlap=numoverlap)
 
     #     return f, t, Sxx
 
@@ -359,7 +400,7 @@ class birdTag:
     #         spectDiff = pd.Series(np.sum(spec[(f >= minFreq) & (f <= maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
     #     else:
     #         spectDiff = pd.Series(np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
-    #     return spectDiff.rolling(dur*self.fs, closed = "both", min_periods = 1).sum()
+    #     return spectDiff.rolling(dur*self.accfs, closed = "both", min_periods = 1).sum()
 
     # def maxWithGap(self,sig,window=60,minGap=5,numPoints = 20):
     #     """
@@ -378,11 +419,11 @@ class birdTag:
     #     sigad = sig.copy()
     #     while len(out) != numPoints:
     #         # create index range around highest value
-    #         out.append([np.arange(np.argmax(sigad) - round(self.fs*window/2),
-    #                 np.argmax(sig) + round(self.fs*window/2))])
+    #         out.append([np.arange(np.argmax(sigad) - round(self.accfs*window/2),
+    #                 np.argmax(sig) + round(self.accfs*window/2))])
     #         # reduce magnitude of this period and 5 minutes surrounding
-    #         sigad[np.arange(np.argmax(sigad) - round(self.fs*window/2) - (self.fs*60*5),
-    #                 np.argmax(sig) + round(self.fs*window/2)) + (self.fs*60*5)] = np.min(sigad)
+    #         sigad[np.arange(np.argmax(sigad) - round(self.accfs*window/2) - (self.accfs*60*5),
+    #                 np.argmax(sig) + round(self.accfs*window/2)) + (self.accfs*60*5)] = np.min(sigad)
     #     return out
     
     # def DVLbehaviours(self,fileloc):
