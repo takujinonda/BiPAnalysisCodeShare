@@ -33,25 +33,26 @@ class birdTag:
         self.accStart = pd.to_datetime(accStart,format='%d/%m/%Y %H:%M:%S')
         self.vidStart = pd.to_datetime(vidStart,format='%d/%m/%Y %H:%M:%S')
 
-    def readin(self):
+    def readin(self,vidOnlyPeriod=True):
         if self.type.lower() == 'axy':
-            self.gps = load.readAxy(self.filepath,cols='gps')
-            self.acc = load.readAxy(self.filepath,cols='acc')
+            self.gps = load.readAxy(self.filepath,cols='gps').reset_index()
+            self.acc = load.readAxy(self.filepath,cols='acc').reset_index()
         elif self.type.lower() == 'bip':
-            self.gps = load.readBiP(self.filepath,col='gps')
-            self.acc = load.readBiP(self.filepath,col='acc')
+            self.gps = load.readBiP(self.filepath,col='gps').reset_index()
+            self.acc = load.readBiP(self.filepath,col='acc').reset_index()
         elif self.type.lower() == 'dvl':
-            self.acc = load.readDVL(self.filepath, accStart=self.accStart, fs=self.accfs, vidStart=self.vidStart)
+            self.acc = load.readDVL(self.filepath, accStart=self.accStart, fs=self.accfs, vidStart=self.vidStart,vidOnlyPeriod=vidOnlyPeriod).reset_index()
 
     def readBeh(self,behavPath):
-        self.dvl_beh = dvlFn.readBeh(behavPath)
+        self.dvl_beh = dvlFn.readBeh(behavPath,self.tagname)
 
     def accFeatures(self,passband=1.5,stopband=3):
         # check if data read in
         if not hasattr(self, 'acc'):
             print("No acceleration data present")
         else:
-            self.acc = pd.concat([self.acc,accFn.accFeatures(self.acc,self.long_acc_name,passband,stopband,self.accfs)],axis=1)
+            out = accFn.accFeatures(self.acc,self.long_acc_name,passband,stopband,self.accfs).reset_index()
+            self.acc = pd.concat([self.acc,out],axis=1)
 
     def rollSum(self,minfreq=3,maxfreq=5):
         self.rolling_freq_sum = accFn.rollingSpecSum(self.acc.Z,minFreq=minfreq,maxFreq=maxfreq,fs=self.accfs,dur=60,inclusive=False)
@@ -67,6 +68,12 @@ class birdTag:
             self.flInds, self.flight = accFn.flightestimate(signal=self.acc.Z,rollSum=self.rolling_freq_sum,fs=self.accfs,behav_data=self.dvl_beh,dt=self.acc.DT,removeErr=removeErr,numPoints=numPoints)
         else:
             self.flInds, self.flight = accFn.flightestimate(signal=self.acc.Z,rollSum=self.rolling_freq_sum,fs=self.accfs,dt=self.acc.DT,numPoints=numPoints)
+
+    def flight_thresholds(self):
+        if (not hasattr(self, 'flInds')) | (not hasattr(self, 'acc')):
+            print(f"Flight estimate or acceleration data required")
+        else:
+            self.acc = pd.concat([self.acc,accFn.flight_est_thresholds(self.acc,self.flInds)],axis=1)
 
     def flapping(self):
         """Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq` and `bout_gap` seconds, respectively. If the tag is DVL, flapping peaks/troughs will be found within estimate flight periods. This function requires a flight mask to be present.
@@ -111,5 +118,15 @@ class birdTag:
         self.EthBeh[ODlow] = "Rest"
         DiveUp = median([np.mean(self.acc.pitch[x]) for x in self.flInds]) + 2*median([np.var(self.acc.pitch[x]) for x in self.flInds])
         DiveDown = median([np.min(self.acc.pitch[x]) for x in self.flInds]) - 30
-        self.EthBeh[np.where(self.flight == 1)[0]] = 'FL'
-        
+        self.EthBeh[np.where(self.flap_bouts == 1)[0]] = 'FL'
+        # find pitch changes
+        pitpeaks,pittroughs,_ = accFn.peak_trough(self.acc.pitch)
+        # change to start with trough
+        pitpeaks = pitpeaks[1:]
+        pittroughs = pittroughs[:-2]
+        data = self.acc.pitch[pitpeaks].values - self.acc.pitch[pittroughs].values
+        PitLarge = data > self.pitFL
+        pitpeaks = pitpeaks[data > self.pitFL]
+
+# for DVL tags, need to calculate flight periods and thresholds across all tags to save to object. These can then be used for threshold analysis of individual tags. Define method for working across all tags, including reading data from all
+# as we will be working with all for defining accuracies, this can be it's own dedicated part of the class. Can later separate etc, but for now just keep together
