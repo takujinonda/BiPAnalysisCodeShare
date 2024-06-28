@@ -98,6 +98,7 @@ def readDVL(filename,accStart,fs,vidStart=None,vidOnlyPeriod=False):
     Read Little Leonardo DVL data logger (400M) data. File locations and start-times of acceleration and video recording (dd/mm/yyyy HH:MM:SS) required.
     """
     accSt = pd.to_datetime(accStart)
+    vidStart = pd.to_datetime(vidStart)
     # read in acceleration data
     dat = pd.read_table(filename, skiprows = 7, sep = ',', usecols = [0,1,2])
 
@@ -105,10 +106,10 @@ def readDVL(filename,accStart,fs,vidStart=None,vidOnlyPeriod=False):
     dat.rename(columns=lambda x: x.strip(), inplace = True)
 
     # add time series
-    dat['DT'] = pd.date_range(accStart, periods = len(dat), freq = f"{int(1/fs*1000)}ms")
+    dat['DT'] = pd.date_range(accSt, periods = len(dat), freq = f"{int(1/fs*1000)}ms")
 
     if vidOnlyPeriod:
         # select data within video range
         dat = dat[(dat.DT >= vidStart) & (dat.DT < vidStart + pd.Timedelta(hours=2))]
 
-    return dat
+    return dat.reset_index()
