@@ -31,9 +31,11 @@ class birdTag:
         self.gpsfpm = gpsfpm
         self.long_acc_name = long_acc_name
         self.accStart = pd.to_datetime(accStart,format='%d/%m/%Y %H:%M:%S')
-        self.vidStart = pd.to_datetime(vidStart,format='%d/%m/%Y %H:%M:%S')
+        if vidStart is not None:
+            vidStart = pd.to_datetime(vidStart,format='%d/%m/%Y %H:%M:%S')
+        self.vidStart = vidStart
 
-    def readin(self):
+    def readin(self,vidOnlyPeriod=False):
         if self.type.lower() == 'axy':
             self.gps = load.readAxy(self.filepath,cols='gps')
             self.acc = load.readAxy(self.filepath,cols='acc')
@@ -41,7 +43,7 @@ class birdTag:
             self.gps = load.readBiP(self.filepath,col='gps')
             self.acc = load.readBiP(self.filepath,col='acc')
         elif self.type.lower() == 'dvl':
-            self.acc = load.readDVL(self.filepath, accStart=self.accStart, fs=self.accfs, vidStart=self.vidStart)
+            self.acc = load.readDVL(self.filepath, accStart=self.accStart, fs=self.accfs, vidStart=self.vidStart, vidOnlyPeriod=vidOnlyPeriod)
 
     def readBeh(self,behavPath):
         self.dvl_beh = dvlFn.readBeh(behavPath)
@@ -51,7 +53,9 @@ class birdTag:
         if not hasattr(self, 'acc'):
             print("No acceleration data present")
         else:
-            self.acc = pd.concat([self.acc,accFn.accFeatures(self.acc,self.long_acc_name,passband,stopband,self.accfs)],axis=1)
+            out = accFn.accFeatures(self.acc,self.long_acc_name,passband,stopband,self.accfs)
+            out.index = self.acc.index
+            self.acc = pd.concat([self.acc,out],axis=1)
 
     def rollSum(self,minfreq=3,maxfreq=5):
         self.rolling_freq_sum = accFn.rollingSpecSum(self.acc.Z,minFreq=minfreq,maxFreq=maxfreq,fs=self.accfs,dur=60,inclusive=False)
