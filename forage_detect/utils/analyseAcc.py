@@ -208,7 +208,6 @@ def interpeaktrough(mags):
 def flatten(xss):
     return [x for xs in xss for x in xs]
 
-
 def peak_trough_in_flight(sig,fl_inds):
     """Identify peaks/troughs of signal `sig` within defined flight periods `fl_inds`
     """
@@ -229,7 +228,7 @@ def peak_trough_in_flight(sig,fl_inds):
     troughs = flatten(fltroughs)
     return peaks, troughs
 
-def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None):
+def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None):
     """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
 
     Args:
@@ -268,6 +267,14 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None
     for x,y in zip(starts,ends):
         flap_bouts[x:y] = 1
     return flap_mask.astype(int), flap_bouts.astype(int)
+
+def flight_est_thresholds(acc,fl_inds):
+    """Define threshold values required for behaviour discrimination. Usage requires full acceleration data `acc` alongside indeces of estiamted flight periods `fl_inds`
+    """
+    pitVar = median([np.var(acc.pitch[x]) for x in fl_inds])
+    pitFLmn = median([np.max(acc.pitMn[x]) for x in fl_inds])
+    ODmFL = median([np.min(acc.ODmn[x]) for x in fl_inds])
+    return pd.DataFrame({'pitVar': pitVar,'pitFlmn':pitFLmn, 'ODmFL': ODmFL})
 
 def flight_pitch_changes(sig,fl_inds,findVal=None):
     outs = []
