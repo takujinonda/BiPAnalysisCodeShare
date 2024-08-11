@@ -208,7 +208,6 @@ def interpeaktrough(mags):
 def flatten(xss):
     return [x for xs in xss for x in xs]
 
-
 def peak_trough_in_flight(sig,fl_inds):
     """Identify peaks/troughs of signal `sig` within defined flight periods `fl_inds`
     """
@@ -229,18 +228,32 @@ def peak_trough_in_flight(sig,fl_inds):
     troughs = flatten(fltroughs)
     return peaks, troughs
 
-def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None):
-    """Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
+def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None):
+    """
+    Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
 
-    Args:
-        sig         - 
-        fs          - 
-        flap_freq   - 
-        bout_gap    - 
+    Parameters
+    ----------
+    sig
+        Dorsoventral acceleration signal.
+    fs
+        Sampling frequency (Hz).
+    flap_freq
+        Typical expected frequency of flapping (Hz).
+    bout_gap
+        Maximum gap between segments to separate from 'glides' and group flapping periods into bouts.
 
 
     Returns:
-    Two arrays of equal length as `sig`, one of flapping sequences `flap_mask` and another of flapping bouts `flap_bouts` (flap 1, not 0).
+    --------
+    flap_mask
+        Periods of flapping grouped by half the typical flapping frequency.
+    flap_bouts
+        Periods of flapping grouped by the bout_gap period.
+    starts
+        Start indeces of flapping bouts.
+    ends
+        End indeces of flapping bouts.
     """
 
     if find_in_flight_periods:
@@ -267,7 +280,15 @@ def flap(sig,fs,bout_gap=10,flap_freq=4,find_in_flight_periods=False,flinds=None
     flap_bouts = np.zeros(len(sig))
     for x,y in zip(starts,ends):
         flap_bouts[x:y] = 1
-    return flap_mask.astype(int), flap_bouts.astype(int)
+    return flap_mask.astype(int), flap_bouts.astype(int), starts, ends
+
+def flight_est_thresholds(acc,fl_inds):
+    """Define threshold values required for behaviour discrimination. Usage requires full acceleration data `acc` alongside indeces of estiamted flight periods `fl_inds`
+    """
+    pitVar = median([np.var(acc.pitch[x]) for x in fl_inds])
+    pitFLmn = median([np.max(acc.pitMn[x]) for x in fl_inds])
+    ODmFL = median([np.min(acc.ODmn[x]) for x in fl_inds])
+    return pd.DataFrame({'pitVar': pitVar,'pitFlmn':pitFLmn, 'ODmFL': ODmFL})
 
 def flight_pitch_changes(sig,fl_inds,findVal=None):
     outs = []
