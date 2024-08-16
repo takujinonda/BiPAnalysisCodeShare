@@ -169,19 +169,31 @@ class birdTag:
         pitpeaks,pittroughs,_ = accFn.peak_trough(self.acc.pitch)
         PitUp = self.pitch[pitpeaks] - self.pitch[pittroughs]
         PitDown = self.pitch[pittroughs] - self.pitch[pitpeaks]
+        PitLarge = list(set(pittroughs[PitUp > toEx] + pitpeaks[PitDown > toEx]))
         PitUpL = pittroughs[PitUp > toEx]
         PitDownL = pitpeaks[PitDown > toEx]
 
         median_mean_flight_pitch = median([mean(self.pitch[x]) for x in self.flInds])
+        # examine flight period starts and search for large pitch change
         for fl_start,fl_end in zip(self.flap_start,self.flap_end):
             if any((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)]))):
                 # find where the nearest increase in pitch is within 4 seconds of flight starting
-                TKoStart = min([PitUpL[((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)])))]])
+                TkoStart = min([PitUpL[((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)])))]])
                 # find pitch peak after this increase in pitch
-                if any(self.pitch[min(pitpeaks[pitpeaks > TKoStart]):] <= median_mean_flight_pitch):
-                    TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TKoStart]) + np.where(self.pitch[min(pitpeaks[pitpeaks > TKoStart]):] < median_mean_flight_pitch)[0][0]],TKoStart + self.accfs*5])
+                if any(self.pitch[min(pitpeaks[pitpeaks > TkoStart]):] <= median_mean_flight_pitch):
+                    TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(self.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + self.accfs*5])
+                    self.EthBeh[TkoStart:TkoEnd] = 'Takeoff'
+        
+        # identify foraging
+        Pitdif = np.where(np.diff(PitLarge) > (23.3 * self.accfs))[0]
+        PitOutSd = np.zeros(len(self.acc.pitch),dtype=int).tolist()
+        # combine all foraging within 23.3 seconds
+        for b in range(len(Pitdif) - 1):
+            if b == 0:
+                if PitLarge[Pitdif[b]] - PitLarge[0] > self.accfs*1.5:
+                    PitOutSd[PitLarge[0]:PitLarge[Pitdif[0]]] = [1] * (PitLarge[Pitdif[0]] - PitLarge[0])
+            elif PitLarge[Pitdif[b + 1]] - PitLarge[Pitdif[b] + 1] > self.accfs * 1.5:
                 
-        # examine flight period starts and search for large pitch change
 
 
 # for DVL tags, need to calculate flight periods and thresholds across all tags to save to object. These can then be used for threshold analysis of individual tags. Define method for working across all tags, including reading data from all
