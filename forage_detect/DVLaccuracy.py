@@ -47,8 +47,9 @@ medianPitchChanges = []
 for x in dvls:
     medianPitchChanges.append(x['data'].calculate_thresholds())
 from statistics import median
-median(medianPitchChanges)
+toEx = median(medianPitchChanges)
 
+dvls[0]['data'].beh_detect(toEx)
 
 test = dvls[0]['data']
 
