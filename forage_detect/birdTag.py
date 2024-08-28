@@ -9,6 +9,7 @@ import utils.loadIn as load
 from math import pi
 from statistics import median, mean
 from typing import Union
+from operator import itemgetter
 
 import numpy as np
 import pandas as pd
@@ -38,6 +39,31 @@ class birdTag:
         if vidStart is not None:
             vidStart = pd.to_datetime(vidStart,format='%d/%m/%Y %H:%M:%S')
         self.vidStart = vidStart
+
+    @staticmethod
+    def find_changes(
+        list_to_search: list,
+        value_to_change
+        ) -> list[list,list]:
+        """
+        Find the start and end points of consecutive series within
+        `list_to_search` list. Starts and ends should be indeces of where
+        `list_to_search` is equal to `value_to_change`.
+        """
+        # check if value to change is present in list
+        if not set(value_to_change).issubset(list_to_search):
+            return None, None
+        is_desired = [x == value_to_change for x in list_to_search]
+        starts = []
+        ends = []
+        if list_to_search[0] == value_to_change:
+            starts.insert(0,0)
+        [starts.append(i+1) for i, x in enumerate([(sub2 - sub1) == 1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
+        [ends.append(i+1) for i, x in enumerate([(sub1 - sub2) == 1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
+        if list_to_search[-1] == value_to_change:
+            ends.append(len(list_to_search))
+
+        return starts, ends
 
     def readin(
             self,
@@ -160,28 +186,30 @@ class birdTag:
         
         # define an empty ethogram
         self.EthBeh = ["" for _ in range(len(self.acc))]
-        ODlow = np.where(self.ODmn < .2)[0]
-        self.EthBeh[ODlow] = "Rest"
+        ODlow = np.where(self.acc.ODmn < .2)[0]
+        for b in ODlow:
+            self.EthBeh[b] = "Rest"
         DiveUp = median([np.mean(self.acc.pitch[x]) for x in self.flInds]) + 2*median([np.var(self.acc.pitch[x]) for x in self.flInds])
         DiveDown = median([np.min(self.acc.pitch[x]) for x in self.flInds]) - 30
-        self.EthBeh[np.where(self.flap_bouts == 1)[0]] = 'FL'
+        for b in np.where(self.flap_bouts == 1)[0]:
+            self.EthBeh[b] = "FL"
         # find pitch changes
         pitpeaks,pittroughs,_ = accFn.peak_trough(self.acc.pitch)
-        PitUp = self.pitch[pitpeaks] - self.pitch[pittroughs]
-        PitDown = self.pitch[pittroughs] - self.pitch[pitpeaks]
+        PitUp = self.acc.pitch[pitpeaks] - self.acc.pitch[pittroughs]
+        PitDown = self.acc.pitch[pittroughs] - self.acc.pitch[pitpeaks]
         PitLarge = list(set(pittroughs[PitUp > toEx] + pitpeaks[PitDown > toEx]))
         PitUpL = pittroughs[PitUp > toEx]
         PitDownL = pitpeaks[PitDown > toEx]
 
-        median_mean_flight_pitch = median([mean(self.pitch[x]) for x in self.flInds])
+        median_mean_flight_pitch = median([mean(self.acc.pitch[x]) for x in self.flInds])
         # examine flight period starts and search for large pitch change
         for fl_start,fl_end in zip(self.flap_start,self.flap_end):
             if any((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)]))):
                 # find where the nearest increase in pitch is within 4 seconds of flight starting
                 TkoStart = min([PitUpL[((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)])))]])
                 # find pitch peak after this increase in pitch
-                if any(self.pitch[min(pitpeaks[pitpeaks > TkoStart]):] <= median_mean_flight_pitch):
-                    TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(self.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + self.accfs*5])
+                if any(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] <= median_mean_flight_pitch):
+                    TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + self.accfs*5])
                     self.EthBeh[TkoStart:TkoEnd] = 'Takeoff'
         
         # identify foraging
@@ -193,11 +221,62 @@ class birdTag:
                 if PitLarge[Pitdif[b]] - PitLarge[0] > self.accfs*1.5:
                     PitOutSd[PitLarge[0]:PitLarge[Pitdif[0]]] = [1] * (PitLarge[Pitdif[0]] - PitLarge[0])
             elif PitLarge[Pitdif[b + 1]] - PitLarge[Pitdif[b] + 1] > self.accfs * 1.5:
-                
+                PitOutSd[PitLarge[Pitdif[b] + 1]:PitLarge[Pitdif[b+1]]] = [1] * (PitLarge[Pitdif[b+1]] - PitLarge[Pitdif[b] + 1])
+                if b == (len(Pitdif) - 2):
+                    PitOutSd[PitLarge[Pitdif[-1]+1]:PitLarge[-1]] = [1] * (PitLarge[-1] - PitLarge[Pitdif[-1]])
+        
+        all_pass = (PitOutSd + (self.EthBeh == 'FL') + (self.acc.ODmn > self.ODmFL))
+        all_pass_indeces = [i for i, x in enumerate(all_pass) if x == 3]
+        for x in all_pass_indeces:
+            self.EthBeh[x] = "Forage"
 
+        dives = np.zeros(len(self.acc.pitch),dtype=int).tolist()
+        ForSt, ForEd = self.find_changes(self.EthBeh, 'Forage')
+        # dives will have a significant drop in pitch to start and are followed
+        # by an increase later as the bird returns to the surface
+        for fs,fe in zip(ForSt,ForEd):
+            # search for dives prior to foraging indication
+            if any(self.acc.pitch[max(1,(fs-self.accfs)):fe] < DiveDown):
+                dive_from = pittroughs[next((i for i in reversed(pittroughs) if i < fs))]
+                # check the dive has a large downward pitch to remove possible
+                # take-offs
+                if not set(pitpeaks[next((i for i in reversed(pitpeaks) if i < dive_from))]).issubset(set(PitDownL)):
+                    continue
+                else:
+                    # search if pitch following potential dive reaches above
+                    # normal levels
+                    if any(self.acc.pitch[dive_from:(dive_from + (self.accfs*10))] > DiveUp):
+                        dive_to = pitpeaks[next(x for x in pitpeaks if ((x > dive_from) & (self.acc.pitch[pitpeaks] > DiveUp)))]
+                        dives[dive_from:dive_to] = [1]*(dive_to - dive_from)
+            if any(self.acc.pitch[fs:fe] < DiveDown):
+                troughsin = pittroughs[((pittroughs >= fs) & (pittroughs <= fe))]
+                diveTroughs = troughsin[self.acc.pitch[troughsin] < DiveDown]
+                for dt in diveTroughs:
+                    if any(self.acc.pitch[dt:(dt + (self.acc.fs * 10))] > DiveUp):
+                        if not set(pitpeaks[next((i for i in reversed(pitpeaks) if i < dt))]).issubset(set(PitDownL)):
+                            continue
+                        else:
+                            dive_to = pitpeaks[next((i for i in pitpeaks if ((i > dt) & (self.acc.pitch[pitpeaks] > DiveUp))))]
+                            dives[dt:dive_to] = [1] * (dive_to - dt)
+        for d in np.where(dives == 1)[0]:
+            self.EthBeh[d] = "Dive"
+            
+        # remove foraging bouts where fewer than two large downward pitch
+        # changes occur within 1s of each other
+        if ForSt != []:
+            for fs,fe in zip(ForSt, ForEd):
+                if sum(np.diff(PitUpL[(PitUpL >= fs) & (PitUpL <= fe)]) < (self.accfs * 2)) < 2:
+                    self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
+                if sum(np.diff(PitDownL[(PitDownL >= fs) & (PitDownL <= fe)]) < (self.accfs * 2)) < 2:
+                    self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
+        
 
-# for DVL tags, need to calculate flight periods and thresholds across all tags to save to object. These can then be used for threshold analysis of individual tags. Define method for working across all tags, including reading data from all
-# as we will be working with all for defining accuracies, this can be it's own dedicated part of the class. Can later separate etc, but for now just keep together
+    # for DVL tags, need to calculate flight periods and thresholds across all
+    # tags to save to object. These can then be used for threshold analysis of
+    # individual tags. Define method for working across all tags, including
+    # reading data from all as we will be working with all for defining
+    # accuracies, this can be it's own dedicated part of the class. Can later
+    # separate etc, but for now just keep together
 
     def calculate_thresholds(
             self
