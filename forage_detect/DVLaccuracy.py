@@ -51,6 +51,35 @@ toEx = median(medianPitchChanges)
 
 dvls[0]['data'].beh_detect(toEx)
 
+import utils.analyseAcc as accFn
+
+import numpy as np
+from itertools import compress
+
+
+dvls[0]['data'].EthBeh = ["" for _ in range(len(dvls[0]['data'].acc))]
+ODlow = np.where(dvls[0]['data'].acc.ODmn < .2)[0]
+for b in ODlow:
+    dvls[0]['data'].EthBeh[b] = "Rest"
+DiveUp = median([np.mean(dvls[0]['data'].acc.pitch[x]) for x in dvls[0]['data'].flInds]) + 2*median([np.var(dvls[0]['data'].acc.pitch[x]) for x in dvls[0]['data'].flInds])
+DiveDown = median([np.min(dvls[0]['data'].acc.pitch[x]) for x in dvls[0]['data'].flInds]) - 30
+for b in np.where(dvls[0]['data'].flap_bouts == 1)[0]:
+    dvls[0]['data'].EthBeh[b] = "FL"
+# find pitch changes
+pitpeaks,pittroughs,_ = accFn.peak_trough(dvls[0]['data'].acc.pitch)
+PitUp = np.array(dvls[0]['data'].acc.pitch[pitpeaks]) - np.array(dvls[0]['data'].acc.pitch[pittroughs])
+PitDown = np.array(dvls[0]['data'].acc.pitch[pittroughs]) - np.array(dvls[0]['data'].acc.pitch[pitpeaks])
+PitUpL = list(compress(pitpeaks,abs(PitDown) > toEx))
+PitDownL = list(compress(pittroughs,PitUp > toEx))
+PitLarge = sorted(PitUpL + PitUpL)
+
+PitLarge = list(set(pittroughs[PitUp > toEx] + pitpeaks[PitDown > toEx]))
+PitUpL = pittroughs[PitUp > toEx]
+PitDownL = pitpeaks[PitDown > toEx]
+
+
+[x for x in PitUp if str(x) != 'nan']
+
 test = dvls[0]['data']
 
 np.sign(np.array(test.flap_bouts)).diff(1).eq(1) & np.sign(np.array(test.flap_bouts).eq(1))
@@ -64,7 +93,7 @@ next = np.where(test.flap_bouts[transition_points[-1]:] == 0)[0][0]
 test.flap_bouts[transition_points[-1]:transition_points[-1] + 28]
 
 
-min([fl_end[fl_end > min(self.pitpeaks[self.pitpeaks > TKoStart]) + np.where(self.pitch[min(self.pitpeaks[self.pitpeaks > TKoStart]):] < median_mean_flight_pitch)[0][0]],TKoStart + self.accfs*5])
+min([fl_end[fl_end > min(dvls[0].pitpeaks[dvls[0].pitpeaks > TKoStart]) + np.where(dvls[0].pitch[min(dvls[0].pitpeaks[dvls[0].pitpeaks > TKoStart]):] < median_mean_flight_pitch)[0][0]],TKoStart + dvls[0].accfs*5])
 
 
 test.flap_end[test.flap_end > min(test.pitpeaks)]
