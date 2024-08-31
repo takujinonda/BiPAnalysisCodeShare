@@ -10,6 +10,7 @@ from math import pi
 from statistics import median, mean
 from typing import Union
 from operator import itemgetter
+from itertools import compress
 
 import numpy as np
 import pandas as pd
@@ -51,7 +52,7 @@ class birdTag:
         `list_to_search` is equal to `value_to_change`.
         """
         # check if value to change is present in list
-        if not set(value_to_change).issubset(list_to_search):
+        if not set([value_to_change]).issubset(set(list_to_search)):
             return None, None
         is_desired = [x == value_to_change for x in list_to_search]
         starts = []
@@ -195,22 +196,23 @@ class birdTag:
             self.EthBeh[b] = "FL"
         # find pitch changes
         pitpeaks,pittroughs,_ = accFn.peak_trough(self.acc.pitch)
-        PitUp = self.acc.pitch[pitpeaks] - self.acc.pitch[pittroughs]
-        PitDown = self.acc.pitch[pittroughs] - self.acc.pitch[pitpeaks]
-        PitLarge = list(set(pittroughs[PitUp > toEx] + pitpeaks[PitDown > toEx]))
-        PitUpL = pittroughs[PitUp > toEx]
-        PitDownL = pitpeaks[PitDown > toEx]
+        PitUp = np.array(self.acc.pitch[pitpeaks]) - np.array(self.acc.pitch[pittroughs])
+        PitDown = np.array(self.acc.pitch[pittroughs]) - np.array(self.acc.pitch[pitpeaks])
+        PitUpL = list(compress(pitpeaks,abs(PitDown) > toEx))
+        PitDownL = list(compress(pittroughs,PitUp > toEx))
+        PitLarge = sorted(PitUpL + PitUpL)
 
-        median_mean_flight_pitch = median([mean(self.acc.pitch[x]) for x in self.flInds])
+        median_mean_flight_pitch = median([np.mean(self.acc.pitch[x]) for x in self.flInds])
         # examine flight period starts and search for large pitch change
         for fl_start,fl_end in zip(self.flap_start,self.flap_end):
-            if any((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)]))):
+            idx_range = range(max([fl_start - self.accfs*4,1]),min([fl_start + self.accfs*4,len(self.acc)]))
+            if any(list(filter(lambda a: a in set(PitUpL),set(list(idx_range))))):
                 # find where the nearest increase in pitch is within 4 seconds of flight starting
                 TkoStart = min([PitUpL[((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)])))]])
                 # find pitch peak after this increase in pitch
                 if any(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] <= median_mean_flight_pitch):
                     TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + self.accfs*5])
-                    self.EthBeh[TkoStart:TkoEnd] = 'Takeoff'
+                    self.EthBeh[TkoStart:TkoEnd] = ['Takeoff'] * (TkoEnd-TkoStart)
         
         # identify foraging
         Pitdif = np.where(np.diff(PitLarge) > (23.3 * self.accfs))[0]
@@ -224,8 +226,8 @@ class birdTag:
                 PitOutSd[PitLarge[Pitdif[b] + 1]:PitLarge[Pitdif[b+1]]] = [1] * (PitLarge[Pitdif[b+1]] - PitLarge[Pitdif[b] + 1])
                 if b == (len(Pitdif) - 2):
                     PitOutSd[PitLarge[Pitdif[-1]+1]:PitLarge[-1]] = [1] * (PitLarge[-1] - PitLarge[Pitdif[-1]])
-        
-        all_pass = (PitOutSd + (self.EthBeh == 'FL') + (self.acc.ODmn > self.ODmFL))
+
+        all_pass = [sum(x) for x in zip(PitOutSd, [x == 'FL' for x in self.EthBeh], [x > self.ODmFL for x in self.acc.ODmn])]
         all_pass_indeces = [i for i, x in enumerate(all_pass) if x == 3]
         for x in all_pass_indeces:
             self.EthBeh[x] = "Forage"
@@ -237,26 +239,26 @@ class birdTag:
         for fs,fe in zip(ForSt,ForEd):
             # search for dives prior to foraging indication
             if any(self.acc.pitch[max(1,(fs-self.accfs)):fe] < DiveDown):
-                dive_from = pittroughs[next((i for i in reversed(pittroughs) if i < fs))]
+                dive_from = next((i for i in reversed(pittroughs) if i < fs))
                 # check the dive has a large downward pitch to remove possible
                 # take-offs
-                if not set(pitpeaks[next((i for i in reversed(pitpeaks) if i < dive_from))]).issubset(set(PitDownL)):
+                if not set([next((i for i in reversed(pitpeaks) if i < dive_from))]).issubset(set(PitDownL)):
                     continue
                 else:
                     # search if pitch following potential dive reaches above
                     # normal levels
                     if any(self.acc.pitch[dive_from:(dive_from + (self.accfs*10))] > DiveUp):
-                        dive_to = pitpeaks[next(x for x in pitpeaks if ((x > dive_from) & (self.acc.pitch[pitpeaks] > DiveUp)))]
+                        dive_to = pitpeaks[np.argmax((pitpeaks > dive_from) & (self.acc.pitch[pitpeaks] > DiveUp))]
                         dives[dive_from:dive_to] = [1]*(dive_to - dive_from)
             if any(self.acc.pitch[fs:fe] < DiveDown):
                 troughsin = pittroughs[((pittroughs >= fs) & (pittroughs <= fe))]
                 diveTroughs = troughsin[self.acc.pitch[troughsin] < DiveDown]
                 for dt in diveTroughs:
-                    if any(self.acc.pitch[dt:(dt + (self.acc.fs * 10))] > DiveUp):
-                        if not set(pitpeaks[next((i for i in reversed(pitpeaks) if i < dt))]).issubset(set(PitDownL)):
+                    if any(self.acc.pitch[dt:(dt + (self.accfs * 10))] > DiveUp):
+                        if not set([next((i for i in reversed(pitpeaks) if i < dt))]).issubset(set(PitDownL)):
                             continue
                         else:
-                            dive_to = pitpeaks[next((i for i in pitpeaks if ((i > dt) & (self.acc.pitch[pitpeaks] > DiveUp))))]
+                            dive_to = pitpeaks[np.argmax((pitpeaks > dt) & (self.acc.pitch[pitpeaks] > DiveUp))]
                             dives[dt:dive_to] = [1] * (dive_to - dt)
         for d in np.where(dives == 1)[0]:
             self.EthBeh[d] = "Dive"
