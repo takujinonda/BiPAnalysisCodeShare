@@ -1,19 +1,19 @@
-from pathlib import Path
-# bring in functions from main_func
-# from forage_detect.main_func import *
-# bring in functions from utils
 import utils.analyseAcc as accFn
 import utils.analyseGPS as gpsFn
 import utils.DVLutils as dvlFn
 import utils.loadIn as load
+import matplotlib.pyplot as plt
+import distinctipy
+import numpy as np
+import pandas as pd
+
 from math import pi
 from statistics import median, mean
 from typing import Union
-from operator import itemgetter
+from matplotlib.lines import Line2D
+from matplotlib.collections import LineCollection
 from itertools import compress
 
-import numpy as np
-import pandas as pd
 
 class birdTag:
     """
@@ -267,9 +267,9 @@ class birdTag:
         # changes occur within 1s of each other
         if ForSt != []:
             for fs,fe in zip(ForSt, ForEd):
-                if sum(np.diff(PitUpL[(PitUpL >= fs) & (PitUpL <= fe)]) < (self.accfs * 2)) < 2:
+                if sum(np.diff([PitUpL[x] for x in np.where([(x >= fs) & (x <= fe) for x in PitUpL])[0]]) > (self.accfs * 2)) < 2:
                     self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
-                if sum(np.diff(PitDownL[(PitDownL >= fs) & (PitDownL <= fe)]) < (self.accfs * 2)) < 2:
+                if sum(np.diff([PitDownL[x] for x in np.where([(x >= fs) & (x <= fe) for x in PitDownL])[0]]) > (self.accfs * 2)) < 2:
                     self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
         
 
@@ -298,3 +298,80 @@ class birdTag:
         if not hasattr(self, 'pitFL'):
             self.pitchPT()
         return 1.5 * self.pitFL
+    
+    @staticmethod
+    def get_changes_in_string_list(
+            string_list : list,
+            line_list : list | None = None
+            ):
+        """
+        Convert list of continuous sections (string or other) and convert to
+        structure for LineCollection plotting.
+        """
+        if line_list is not None:
+            assert len(string_list) == len(line_list), "string_list and line_list are not of equal length"
+            to_use = line_list
+        else:
+            to_use = string_list
+        lines = []
+        strings = []
+        inds = []
+        idx = 0
+        while idx < len(string_list) - 1:
+            current_val = string_list[idx]
+            if len(np.unique(string_list[idx:])) == 1:
+                break
+            next_change = np.where([x != current_val for x in string_list[idx:]])[0][0]
+            lines.append(np.array([(x,y) for x,y in zip(list(range(idx,idx+next_change)),
+                                        [to_use[b] for b in list(range(idx,idx+next_change))])]))
+            strings.append([current_val])
+            inds.append(list(range(idx,idx+next_change)))
+            idx += next_change
+
+        return inds, lines, strings
+
+    @staticmethod
+    def make_proxy(
+        color: list,
+        **kwargs):
+        """
+        Make custom lines for plot legend.
+
+        Args
+        ----
+        color
+            List of rgb array(s).
+        """
+        return Line2D([0, 1], [0, 1], color=color, **kwargs)
+
+    def plot_acc_behaviours(
+            self,
+            acc_sig
+            ):
+
+        cats = np.unique(self.EthBeh)
+        n_cats = len(cats)
+        # generate distinct colours
+        cols = distinctipy.get_colors(n_cats)
+        behs = np.unique(self.EthBeh)
+        # generate behaviour-based line collections
+        inds, arcs, behavs = self.get_changes_in_string_list(self.EthBeh,
+                                        getattr(self.acc, acc_sig))
+        # assign relevant colours
+        arc_colours = []
+        for x in behavs:
+            arc_colours.append(list(compress(cols,behs == x))[0])
+
+        fig, ax = plt.subplots(figsize=(6.4, 3.2))
+        # set axes limits manually because Collections do not take part in autoscaling
+        ax.set_xlim(0, len(self.EthBeh))
+        ax.set_ylim(-6, 6)
+
+        line_collection = LineCollection(arcs,linewidths = 1, colors = arc_colours)
+
+        ax.add_collection(line_collection)
+        # generate legend objects
+        proxies = [self.make_proxy(x,linewidth=1) for x in arc_colours]
+        ax.legend(proxies, behs)
+
+        plt.show()
