@@ -51,6 +51,8 @@ toEx = median(medianPitchChanges)
 
 dvls[0]['data'].beh_detect(toEx)
 
+dvls[0]['data'].plot_acc_behaviours('DZ')
+
 import utils.analyseAcc as accFn
 
 import numpy as np
@@ -87,6 +89,38 @@ for fl_start,fl_end in zip(dvls[0]['data'].flap_start,dvls[0]['data'].flap_end):
             TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(dvls[0]['data'].acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + dvls[0]['data'].accfs*5])
             dvls[0]['data'].EthBeh[TkoStart:TkoEnd] = ['Takeoff'] * (TkoEnd-TkoStart)
 
+
+def find_changes(
+    list_to_search: list,
+    value_to_change
+    ) -> list[list,list]:
+    """
+    Find the start and end points of consecutive series within
+    `list_to_search` list. Starts and ends should be indeces of where
+    `list_to_search` is equal to `value_to_change`.
+    """
+    # check if value to change is present in list
+    if not set([value_to_change]).issubset(set(list_to_search)):
+        return None, None
+    is_desired = [x == value_to_change for x in list_to_search]
+    starts = []
+    ends = []
+    if list_to_search[0] == value_to_change:
+        starts.insert(0,0)
+    [starts.append(i+1) for i, x in enumerate([(sub2 - sub1) == 1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
+    [ends.append(i+1) for i, x in enumerate([(sub1 - sub2) == 1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
+    if list_to_search[-1] == value_to_change:
+        ends.append(len(list_to_search))
+
+    return starts, ends
+
+is_desired = [x == 'Forage' for x in test]
+starts = []
+ends = []
+if test[0] == 'Forage':
+    starts.insert(0,0)
+[starts.append(i+1) for i,x in enumerate([(sub2-sub1) == 1 for sub1,sub2 in zip(is_desired,is_desired[1:])]) if x]
+
 # identify foraging
 Pitdif = np.where(np.diff(PitLarge) > (23.3 * dvls[0]['data'].accfs))[0]
 PitOutSd = np.zeros(len(dvls[0]['data'].acc.pitch),dtype=int).tolist()
@@ -107,6 +141,10 @@ for x in all_pass_indeces:
 
 dives = np.zeros(len(dvls[0]['data'].acc.pitch),dtype=int).tolist()
 ForSt, ForEd = dvls[0]['data'].find_changes(dvls[0]['data'].EthBeh, 'Forage')
+
+list(range(ForSt[0],ForEd[0]))
+test[5530:6865]
+
 # dives will have a significant drop in pitch to start and are followed
 # by an increase later as the bird returns to the surface
 for fs,fe in zip(ForSt,ForEd):
@@ -188,10 +226,6 @@ def get_changes_in_string_list(
 from matplotlib.lines import Line2D
 def make_proxy(color, **kwargs):
     return Line2D([0, 1], [0, 1], color=color, **kwargs)
-
-make_proxy()
-proxies = [make_proxy(item, lines, linewidth=5) for item in z]
-ax.legend(proxies, ['Line 1', 'Line 2', 'Line 3', 'Line 4'])
 
 import distinctipy
 from itertools import compress
