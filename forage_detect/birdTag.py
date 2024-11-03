@@ -23,16 +23,17 @@ class birdTag:
     def __init__(
             self,
             filepath: str,
-            type: str,
+            tag_type: str,
             tagname: str,
             accfs: int,
             long_acc_name: Union[str,None] = None,
             gps_fixes_per_minute: Union[int,None] = None,
             accStart: Union[np.datetime64,None] = None,
-            vidStart: Union[np.datetime64,None] = None
+            vidStart: Union[np.datetime64,None] = None,
+            *args,**kwargs
             ):
         self.filepath = filepath
-        self.type = type.casefold()
+        self.tag_type = tag_type.casefold()
         self.tagname = tagname
         self.accfs = accfs
         self.gps_fixes_per_minute = gps_fixes_per_minute
@@ -71,13 +72,13 @@ class birdTag:
             self,
             vidOnlyPeriod: bool = True
             ) -> None:
-        if self.type == 'axy':
+        if self.tag_type == 'axy':
             self.gps = load.readAxy(self.filepath,cols='gps').reset_index()
             self.acc = load.readAxy(self.filepath,cols='acc').reset_index()
-        if self.type == 'bip':
+        if self.tag_type == 'bip':
             self.gps = load.readBiP(self.filepath,col='gps').reset_index()
             self.acc = load.readBiP(self.filepath,col='acc').reset_index()
-        if self.type == 'dvl':
+        if self.tag_type == 'dvl':
             self.acc = load.readDVL(self.filepath, 
                                     accStart=self.accStart,
                                     fs=self.accfs,
@@ -124,7 +125,7 @@ class birdTag:
             self.rollSum()
         
         # if dvl tag, reduce magnitude of erroneous category
-        if (self.type == 'dvl') & removeErr:
+        if (self.tag_type == 'dvl') & removeErr:
             self.flInds, self.flight = accFn.flightestimate(signal=self.acc.Z,rollSum=self.rolling_freq_sum,fs=self.accfs,behav_data=self.dvl_beh,dt=self.acc.DT,removeErr=removeErr,numPoints=numPoints)
         else:
             self.flInds, self.flight = accFn.flightestimate(signal=self.acc.Z,rollSum=self.rolling_freq_sum,fs=self.accfs,dt=self.acc.DT,numPoints=numPoints)
@@ -146,10 +147,10 @@ class birdTag:
         Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq` and `bout_gap` seconds, respectively. If the tag is DVL, flapping peaks/troughs will be found within estimate flight periods. This function requires a flight mask to be present.
         """
 
-        if not hasattr(self, 'flight') & (self.type == 'dvl'):
+        if not hasattr(self, 'flight') & (self.tag_type == 'dvl'):
             print("Add estimated flight periods")
         
-        if self.type == 'dvl':
+        if self.tag_type == 'dvl':
             self.flap, self.flap_bouts, self.flap_start, self.flap_end = accFn.flap(sig = self.acc.Z, fs = self.accfs, bout_gap = 10, flap_freq = 4,find_in_flight_periods=True,flinds=self.flInds)
         else:
             self.flap, self.flap_bouts, self.flap_start, self.flap_end = accFn.flap(sig = self.acc.Z, fs = self.accfs, bout_gap = 10, flap_freq = 4)
@@ -183,11 +184,11 @@ class birdTag:
             if not hasattr(self, 'flight'):
                 print('Flight not calculated\nRunning now...')
                 self.flight_est()
-            if not hasattr(self,'ODmFL') & (self.type == 'dvl'):
+            if not hasattr(self,'ODmFL') & (self.tag_type == 'dvl'):
                 print('Calculating some thresholds')
                 self.pitchPT()
 
-        if (toEx is None) & (self.type == 'axy'):
+        if (toEx is None) & (self.tag_type == 'axy'):
             raise ValueError('Pitch median threshold not given')
         
         # define an empty ethogram
@@ -294,7 +295,7 @@ class birdTag:
         # check if flight estimate periods are present
         if not hasattr(self, 'flInds'):
             print('Estimating flight periods')
-            if self.type == 'dvl':
+            if self.tag_type == 'dvl':
                 self.flight_est(numPoints=10,removeErr=True)
         # check if flight estimate median pitch range recorded
         if not hasattr(self, 'pitFL'):
