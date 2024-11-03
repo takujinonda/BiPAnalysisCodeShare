@@ -12,6 +12,8 @@ def readBeh(behaviour_file, name):
     out.loc[out.Behaviour == 'Dive','Behaviour'] = out.loc[out.Behaviour == 'Dive','ForageBeh']
     # remove superfluous column
     out.drop('ForageBeh',axis=1,inplace=True)
+    # change 'IT' behaviour (intermediate takeoff) to flight
+    out.Behaviour[out.Behaviour == 'IT'] = "FL"
 
     # set time to datetime
     out.Time = pd.to_datetime('31/08/2018 ' + out.Time, format = '%d/%m/%Y %H.%M.%S.%f')
