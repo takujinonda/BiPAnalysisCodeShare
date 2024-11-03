@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import distinctipy
 import numpy as np
 import pandas as pd
+from typing import Union
 
 from math import pi
 from statistics import median, mean
@@ -60,7 +61,7 @@ class birdTag:
         if list_to_search[0] == value_to_change:
             starts.insert(0,0)
         [starts.append(i+1) for i, x in enumerate([(sub2 - sub1) == 1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
-        [ends.append(i+1) for i, x in enumerate([(sub1 - sub2) == 1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
+        [ends.append(i+1) for i, x in enumerate([(sub2 - sub1) == -1 for sub1,sub2 in zip(is_desired, is_desired[1:])]) if x]
         if list_to_search[-1] == value_to_change:
             ends.append(len(list_to_search))
 
@@ -136,6 +137,10 @@ class birdTag:
         else:
             self.acc = pd.concat([self.acc,accFn.flight_est_thresholds(self.acc,self.flInds)],axis=1)
 
+    @staticmethod
+    def flatten(xss):
+        return [x for xs in xss for x in xs]
+
     def flapping(self):
         """
         Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq` and `bout_gap` seconds, respectively. If the tag is DVL, flapping peaks/troughs will be found within estimate flight periods. This function requires a flight mask to be present.
@@ -186,14 +191,11 @@ class birdTag:
             raise ValueError('Pitch median threshold not given')
         
         # define an empty ethogram
-        self.EthBeh = ["" for _ in range(len(self.acc))]
-        ODlow = np.where(self.acc.ODmn < .2)[0]
-        for b in ODlow:
-            self.EthBeh[b] = "Rest"
+        self.EthBeh = np.array(["Unknown" for _ in range(len(self.acc))])
+        self.EthBeh[np.where(self.acc.ODmn < .2)] = "Rest"
         DiveUp = median([np.mean(self.acc.pitch[x]) for x in self.flInds]) + 2*median([np.var(self.acc.pitch[x]) for x in self.flInds])
         DiveDown = median([np.min(self.acc.pitch[x]) for x in self.flInds]) - 30
-        for b in np.where(self.flap_bouts == 1)[0]:
-            self.EthBeh[b] = "FL"
+        self.EthBeh[np.where(self.flap_bouts) == 1] = "FL"
         # find pitch changes
         pitpeaks,pittroughs,_ = accFn.peak_trough(self.acc.pitch)
         PitUp = np.array(self.acc.pitch[pitpeaks]) - np.array(self.acc.pitch[pittroughs])
@@ -202,17 +204,18 @@ class birdTag:
         PitDownL = list(compress(pittroughs,PitUp > toEx))
         PitLarge = sorted(PitUpL + PitUpL)
 
-        median_mean_flight_pitch = median([np.mean(self.acc.pitch[x]) for x in self.flInds])
-        # examine flight period starts and search for large pitch change
-        for fl_start,fl_end in zip(self.flap_start,self.flap_end):
-            idx_range = range(max([fl_start - self.accfs*4,1]),min([fl_start + self.accfs*4,len(self.acc)]))
-            if any(list(filter(lambda a: a in set(PitUpL),set(list(idx_range))))):
-                # find where the nearest increase in pitch is within 4 seconds of flight starting
-                TkoStart = min([PitUpL[((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)])))]])
-                # find pitch peak after this increase in pitch
-                if any(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] <= median_mean_flight_pitch):
-                    TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + self.accfs*5])
-                    self.EthBeh[TkoStart:TkoEnd] = ['Takeoff'] * (TkoEnd-TkoStart)
+        # DROP THE TAKE-OFF AS THESE WERE NOT DEFINED FROM VIDEO FOOTAGE
+        # median_mean_flight_pitch = median([np.mean(self.acc.pitch[x]) for x in self.flInds])
+        # # examine flight period starts and search for large pitch change
+        # for fl_start,fl_end in zip(self.flap_start,self.flap_end):
+        #     idx_range = range(max([fl_start - self.accfs*4,1]),min([fl_start + self.accfs*4,len(self.acc)]))
+        #     if any(list(filter(lambda a: a in set(PitUpL),set(list(idx_range))))):
+        #         # find where the nearest increase in pitch is within 4 seconds of flight starting
+        #         TkoStart = min([PitUpL[((PitUpL > (max([fl_start - self.accfs*4,1]))) & (PitUpL < min([max(fl_start) + self.accfs*4,len(self.acc)])))]])
+        #         # find pitch peak after this increase in pitch
+        #         if any(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] <= median_mean_flight_pitch):
+        #             TkoEnd = min([fl_end[fl_end > min(pitpeaks[pitpeaks > TkoStart]) + np.where(self.acc.pitch[min(pitpeaks[pitpeaks > TkoStart]):] < median_mean_flight_pitch)[0][0]],TkoStart + self.accfs*5])
+        #             self.EthBeh[TkoStart:TkoEnd] = ['Takeoff'] * (TkoEnd-TkoStart)
         
         # identify foraging
         Pitdif = np.where(np.diff(PitLarge) > (23.3 * self.accfs))[0]
@@ -265,13 +268,12 @@ class birdTag:
             
         # remove foraging bouts where fewer than two large downward pitch
         # changes occur within 1s of each other
-        if ForSt != []:
-            for fs,fe in zip(ForSt, ForEd):
-                if sum(np.diff([PitUpL[x] for x in np.where([(x >= fs) & (x <= fe) for x in PitUpL])[0]]) > (self.accfs * 2)) < 2:
-                    self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
-                if sum(np.diff([PitDownL[x] for x in np.where([(x >= fs) & (x <= fe) for x in PitDownL])[0]]) > (self.accfs * 2)) < 2:
-                    self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
-        
+        # if ForSt != []:
+        #     for fs,fe in zip(ForSt, ForEd):
+        #         if sum(np.diff([PitUpL[x] for x in np.where([(x >= fs) & (x <= fe) for x in PitUpL])[0]]) > (self.accfs * 2)) < 2:
+        #             self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)
+        #         if sum(np.diff([PitDownL[x] for x in np.where([(x >= fs) & (x <= fe) for x in PitDownL])[0]]) > (self.accfs * 2)) < 2:
+        #             self.EthBeh[fs:fe] = ["Failed 1"] * (fe - fs)   
 
     # for DVL tags, need to calculate flight periods and thresholds across all
     # tags to save to object. These can then be used for threshold analysis of
@@ -302,7 +304,7 @@ class birdTag:
     @staticmethod
     def get_changes_in_string_list(
             string_list : list,
-            line_list : list | None = None
+            line_list : Union[list, None] = None
             ):
         """
         Convert list of continuous sections (string or other) and convert to
@@ -353,14 +355,13 @@ class birdTag:
         n_cats = len(cats)
         # generate distinct colours
         cols = distinctipy.get_colors(n_cats)
-        behs = np.unique(self.EthBeh)
         # generate behaviour-based line collections
         inds, arcs, behavs = self.get_changes_in_string_list(self.EthBeh,
                                         getattr(self.acc, acc_sig))
         # assign relevant colours
         arc_colours = []
         for x in behavs:
-            arc_colours.append(list(compress(cols,behs == x))[0])
+            arc_colours.append(list(compress(cols,cats == x))[0])
 
         fig, ax = plt.subplots(figsize=(6.4, 3.2))
         # set axes limits manually because Collections do not take part in autoscaling
@@ -372,6 +373,12 @@ class birdTag:
         ax.add_collection(line_collection)
         # generate legend objects
         proxies = [self.make_proxy(x,linewidth=1) for x in arc_colours]
-        ax.legend(proxies, behs)
+        # get order of behaviours and sort for legend
+        flat_behavs = self.flatten(behavs)
+        x = []
+        for b in cats:
+            x.append(np.where(self.EthBeh == b)[0][0])
+        ordered_behavs = [b for _, b in sorted(zip(x, cats))]
+        ax.legend(proxies, ordered_behavs)
 
         plt.show()
