@@ -2,6 +2,7 @@
 import platform
 import pandas as pd
 import glob
+import sys
 
 from typing import Union
 from src.birdTag import birdTag
@@ -67,6 +68,13 @@ from statistics import median
 toEx = median(medianPitchChanges)
 
 dvls[0].beh_detect(toEx=toEx)
+dvls[0].plot_acc_behaviours('DZ')
+
+
+input()
+# cancel out after any key pressed
+sys.exit()
+
 dvls[1].beh_detect(toEx=toEx)
 
 inds, arcs, behavs = dvls[0].get_changes_in_string_list(dvls[0].EthBeh,
@@ -82,10 +90,9 @@ radii = np.linspace(4, 5, num=len(colors))
 arcs = [np.column_stack([r * np.cos(theta), r * np.sin(theta)]) for r in radii]
 
 
-
+import matplotlib.pyplot as plt
 from itertools import compress
 
-dvls[0].plot_acc_behaviours('DZ')
 
 import numpy as np
 import distinctipy

@@ -486,17 +486,16 @@ class birdTag:
         line_collection = LineCollection(arcs,linewidths = 1, colors = arc_colours)
 
         ax.add_collection(line_collection)
-        # generate legend objects
-        proxies = [self.make_proxy(x,linewidth=1) for x in arc_colours]
         # get order of behaviours and sort for legend
-        flat_behavs = self.flatten(behavs)
-        x = []
-        for b in cats:
-            x.append(np.where(self.EthBeh == b)[0][0])
-        ordered_behavs = [b for _, b in sorted(zip(x, cats))]
+        beh_order = [behavs.index(x) for x in cats]
+        # create list of behaviours by order of appearance
+        sorted_behaviours = [x for _, x in sorted(zip(beh_order, cats))]
+        sorted_cols = [x for _, x in sorted(zip(beh_order, cols))]
+        # generate legend objects
+        proxies = [self.make_proxy(x,linewidth=1) for x in sorted_cols]
         ax.set_ylim(np.min(getattr(self.acc, acc_sig)),
                     np.max(getattr(self.acc, acc_sig)))
-        leg = ax.legend(proxies, ordered_behavs)
+        leg = ax.legend(proxies, sorted_behaviours)
         # increase the width of the legend lines for legelibility
         for line in leg.get_lines():
             line.set_linewidth(4.0)
