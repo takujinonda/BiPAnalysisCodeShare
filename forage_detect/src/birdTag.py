@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import distinctipy
 import numpy as np
 import pandas as pd
+# suppress warnings on chained assignment (not relevant here)
+pd.options.mode.chained_assignment = None
 import datetime as dt
 from typing import Union
 
@@ -185,7 +187,7 @@ class birdTag:
         upsampled = self.dvl_beh[['Behaviour','Time']]
         upsampled.loc[-1] = [upsampled.Behaviour.iloc[-1],upsampled.Time[0]+pd.Timedelta(2,'hour')]
         upsampled.reset_index(drop=True)
-        upsampled = upsampled.resample(pd.Timedelta(5,'ms'),on='Time').last().ffill()
+        upsampled = upsampled.resample(pd.Timedelta(50,'ms'),on='Time').last().ffill()
 
         self.upsampled_beh = upsampled
 
@@ -407,8 +409,8 @@ class birdTag:
             line_list : Union[list, None] = None
             ):
         """
-        Convert list of continuous sections (string or other) and convert to
-        structure for LineCollection plotting.
+        Convert list of continuous sections (string or other) into start/end
+        indeces and corresponding value.
         """
         if line_list is not None:
             if len(string_list) != len(line_list):
@@ -416,12 +418,35 @@ class birdTag:
             to_use = line_list
         else:
             to_use = string_list
-        if type(to_use) != np.ndarray:
-            to_use = np.array(to_use)
+        # ensure the string_list which you are separating by is ndarray
+        if type(string_list) != np.ndarray:
+            string_list = np.array(string_list)
         change_idx = np.where(string_list[:-1] != string_list[1:])
         change_idx = np.append(change_idx, len(string_list)-1)
         change_strings = string_list[change_idx]
 
+        return change_idx, change_strings
+
+    def get_lines_from_string_list(
+            self,
+            string_list : list,
+            line_list : Union[list, None] = None
+            ):
+        """
+        Convert list of continuous sections (string or other) and convert to
+        structure for LineCollection plotting.
+        """
+        change_idx, change_strings = self.get_changes_in_string_list(
+            string_list = string_list,
+            line_list = line_list
+        )
+        
+        if line_list is not None:
+            if len(string_list) != len(line_list):
+                raise ValueError("string_list and line_list are not of equal length")
+            to_use = line_list
+        else:
+            to_use = string_list
         strings = np.empty(len(to_use),dtype=np.array(string_list).dtype)
         lines = []
         strings = []
@@ -431,19 +456,8 @@ class birdTag:
             strings[start:idx+1] = [string]
             inds.append(list(range(start,idx+1)))
             lines.append(np.array([(x,y) for x,y in zip(list(range(start,idx+1)),
-                [to_use[b] for b in list(range(start,idx+1))])]))
+                [line_list[b] for b in list(range(start,idx+1))])]))
             start = idx+1
-
-        # while idx < len(string_list) - 1:
-        #     current_val = string_list[idx]
-        #     if len(np.unique(string_list[idx:])) == 1:
-        #         break
-        #     next_change = np.where([x != current_val for x in string_list[idx:]])[0][0]
-            # lines.append(np.array([(x,y) for x,y in zip(list(range(idx,idx+next_change)),
-            #                             [to_use[b] for b in list(range(idx,idx+next_change))])]))
-        #     strings.append([current_val])
-        #     inds.append(list(range(idx,idx+next_change)))
-        #     idx += next_change
 
         return inds, lines, strings
 
@@ -463,16 +477,22 @@ class birdTag:
 
     def plot_acc_behaviours(
             self,
-            acc_sig
+            acc_sig,
+            cols = None
             ):
 
         cats = np.unique(self.EthBeh)
         n_cats = len(cats)
-        # generate distinct colours
-        cols = distinctipy.get_colors(n_cats)
+        if cols is None:
+            # generate distinct colours
+            cols = distinctipy.get_colors(n_cats)
+        if len(cols) != n_cats:
+            raise ValueError(f"Number of provided colours ({len(cols)}) does not match the number of detected behaviours ({len(cats)})")
         # generate behaviour-based line collections
-        inds, arcs, behavs = self.get_changes_in_string_list(self.EthBeh,
-                                        getattr(self.acc, acc_sig))
+        inds, arcs, behavs = self.get_lines_from_string_list(
+            string_list = self.EthBeh,
+            line_list = getattr(self.acc, acc_sig)
+            )
         # assign relevant colours
         arc_colours = []
         for x in behavs:
@@ -499,5 +519,14 @@ class birdTag:
         # increase the width of the legend lines for legelibility
         for line in leg.get_lines():
             line.set_linewidth(4.0)
+        ax.set_ylabel(acc_sig)
+        ax.title.set_text(f'{self.tagname} estimated behaviours')
 
         plt.show()
+
+    def test_det_beh_agreement(
+        self,
+        all_forg: bool = False
+        ):
+        # define the behaviours found in video
+        cats = np.unique(self.upsampled_beh.Behaviour)
