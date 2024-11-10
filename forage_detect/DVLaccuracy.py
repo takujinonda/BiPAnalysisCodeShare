@@ -70,6 +70,54 @@ toEx = median(medianPitchChanges)
 dvls[0].beh_detect(toEx=toEx)
 dvls[0].plot_acc_behaviours('DZ')
 
+
+
+
+cats = np.unique(dvls[0].upsampled_beh.Behaviour)
+chg_idx, chg_str = dvls[0].get_changes_in_string_list(dvls[0].upsampled_beh.Behaviour)
+test = dvls[0].EthBeh
+start = 0
+beh_present = []
+correct_proportion = []
+for idx,b in zip(chg_idx,chg_str):
+    # find if set intersection exists
+    if any(set(test[start:(idx+1)]).intersection(set([b]))):
+        beh_present.append(any(set(test[start:(idx+1)]).intersection(set([b]))))
+        correct_proportion.append(np.sum(test[start:(idx+1)] == b)/((idx+1) - start))
+    else:
+        beh_present.append(False)
+        correct_proportion.append(np.sum(test[start:(idx+1)] == b)/((idx+1) - start))
+    start = idx
+
+[(x,y) for x,y in zip(chg_str,correct_proportion)]
+
+
+
+
+
+len(chg_str)
+
+start = chg_idx[0]
+any(set(test[start:(chg_idx[1]+1)]).intersection(set([chg_str[1]])))
+
+any(set(test[start:(idx+1)]).intersection(set([b])))
+
+
+    set(test[start:idx]).intersect(set(b))
+    # number of correctly sampled values
+
+
+
+
+dvls[0].upsampled_beh.Behaviour[51231]
+
+set(test[start:chg_idx[0]+1])
+
+
+np.unique(dvls[0].EthBeh)
+np.unique(dvls[0].dvl_beh.Behaviour)
+
+
 input()
 # cancel out after any key pressed
 sys.exit()
@@ -78,6 +126,62 @@ import matplotlib.pyplot as plt
 from itertools import compress
 import numpy as np
 import distinctipy
+
+acc_sig='DZ'
+cols=None
+cats = np.unique(dvls[0].EthBeh)
+n_cats = len(cats)
+if cols is None:
+    # generate distinct colours
+    cols = distinctipy.get_colors(n_cats)
+if len(cols) != n_cats:
+    raise ValueError(f"Number of provided colours ({len(cols)}) does not match the number of detected behaviours ({len(cats)})")
+# generate behaviour-based line collections
+inds, arcs, behavs = dvls[0].get_lines_from_string_list(
+    string_list = dvls[0].EthBeh,
+    line_list = getattr(dvls[0].acc, acc_sig)
+    )
+# assign relevant colours
+arc_colours = []
+for x in behavs:
+    arc_colours.append(list(compress(cols,cats == x))[0])
+
+from matplotlib.collections import LineCollection
+
+fig, ax = plt.subplots(figsize=(6.4, 3.2))
+# set axes limits manually because Collections do not take part in autoscaling
+ax.set_xlim(0, len(dvls[0].EthBeh))
+# ax.set_ylim(-6, 6)
+
+line_collection = LineCollection(arcs,linewidths = 1, colors = arc_colours)
+
+ax.add_collection(line_collection)
+# get order of behaviours and sort for legend
+beh_order = [behavs.index(x) for x in cats]
+# create list of behaviours by order of appearance
+sorted_behaviours = [x for _, x in sorted(zip(beh_order, cats))]
+sorted_cols = [x for _, x in sorted(zip(beh_order, cols))]
+# generate legend objects
+proxies = [dvls[0].make_proxy(x,linewidth=1) for x in sorted_cols]
+ax.set_ylim(np.min(getattr(dvls[0].acc, acc_sig)),
+            np.max(getattr(dvls[0].acc, acc_sig)))
+leg = ax.legend(proxies, sorted_behaviours)
+# increase the width of the legend lines for legelibility
+for line in leg.get_lines():
+    line.set_linewidth(4.0)
+
+np.unique(dvls[0].upsampled_beh.Behaviour)
+c = np.concatenate((np.where(dvls[0].upsampled_beh.Behaviour == 's'),np.where(dvls[0].upsampled_beh.Behaviour == 'd')),axis=1)
+c.sort(kind='mergesort')
+
+ax.plot(c.tolist()[0],[1] * c.shape[1],'r*')
+
+plt.show()
+
+len(dvls[0].EthBeh)
+len(dvls[0].upsampled_beh)
+dvls[0].acc.DT
+
 
 test=dvls[0]
 cats = np.unique(test.dvl_beh.Behaviour)
