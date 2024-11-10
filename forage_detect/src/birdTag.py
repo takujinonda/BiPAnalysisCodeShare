@@ -478,7 +478,8 @@ class birdTag:
     def plot_acc_behaviours(
             self,
             acc_sig,
-            cols = None
+            cols = None,
+            plot_vid_forage: bool = True
             ):
 
         cats = np.unique(self.EthBeh)
@@ -511,16 +512,27 @@ class birdTag:
         # create list of behaviours by order of appearance
         sorted_behaviours = [x for _, x in sorted(zip(beh_order, cats))]
         sorted_cols = [x for _, x in sorted(zip(beh_order, cols))]
-        # generate legend objects
-        proxies = [self.make_proxy(x,linewidth=1) for x in sorted_cols]
         ax.set_ylim(np.min(getattr(self.acc, acc_sig)),
                     np.max(getattr(self.acc, acc_sig)))
+        # generate legend objects
+        proxies = [self.make_proxy(x,linewidth=1) for x in sorted_cols]
+        # overlay detected foraging if requested
+        if plot_vid_forage:
+            np.unique(self.upsampled_beh.Behaviour)
+            c = np.concatenate((np.where(self.upsampled_beh.Behaviour == 's'),
+                np.where(self.upsampled_beh.Behaviour == 'd')),axis=1)
+            c.sort(kind='mergesort')
+            ax.plot(c.tolist()[0],[1] * c.shape[1],'k*')
+            legend_obj = Line2D([],[],color='k',marker='*',linestyle='None')
+            proxies.append(legend_obj)
+            sorted_behaviours = sorted_behaviours + ['Video foraging']
         leg = ax.legend(proxies, sorted_behaviours)
         # increase the width of the legend lines for legelibility
         for line in leg.get_lines():
             line.set_linewidth(4.0)
         ax.set_ylabel(acc_sig)
         ax.title.set_text(f'{self.tagname} estimated behaviours')
+
 
         plt.show()
 
