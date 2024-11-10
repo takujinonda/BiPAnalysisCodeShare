@@ -70,10 +70,64 @@ toEx = median(medianPitchChanges)
 dvls[0].beh_detect(toEx=toEx)
 dvls[0].plot_acc_behaviours('DZ')
 
-
 input()
 # cancel out after any key pressed
 sys.exit()
+
+import matplotlib.pyplot as plt
+from itertools import compress
+import numpy as np
+import distinctipy
+
+test=dvls[0]
+cats = np.unique(test.dvl_beh.Behaviour)
+
+test.get_changes_in_string_list(test.upsampled_beh.Behaviour)
+
+string_list = np.array(test.upsampled_beh.Behaviour)
+change_idx = np.where(string_list[:-1] != string_list[1:])
+change_idx = np.append(change_idx, len(string_list)-1)
+change_strings = string_list[change_idx]
+
+
+
+line_list = None
+if line_list is not None:
+    if len(string_list) != len(line_list):
+        raise ValueError("string_list and line_list are not of equal length")
+    to_use = line_list
+else:
+    to_use = string_list
+if type(to_use) != np.ndarray:
+    to_use = np.array(to_use)
+change_idx = np.where(string_list[:-1] != string_list[1:])
+change_idx = np.append(change_idx, len(string_list)-1)
+change_strings = string_list[change_idx]
+
+string_list = dvls[0].upsampled_beh.Behaviour
+line_list=None
+if line_list is not None:
+    if len(string_list) != len(line_list):
+        raise ValueError("string_list and line_list are not of equal length")
+    to_use = line_list
+else:
+    to_use = string_list
+if type(to_use) != np.ndarray:
+    to_use = np.array(to_use)
+change_idx = np.where(string_list[:-1] != string_list[1:])
+change_idx = np.append(change_idx, len(string_list)-1)
+change_strings = string_list[change_idx]
+
+
+
+
+
+
+
+
+
+
+
 
 dvls[1].beh_detect(toEx=toEx)
 
@@ -90,12 +144,7 @@ radii = np.linspace(4, 5, num=len(colors))
 arcs = [np.column_stack([r * np.cos(theta), r * np.sin(theta)]) for r in radii]
 
 
-import matplotlib.pyplot as plt
-from itertools import compress
 
-
-import numpy as np
-import distinctipy
 cats = np.unique(dvls[0].EthBeh)
 n_cats = len(cats)
 # generate distinct colours
@@ -106,11 +155,49 @@ inds, arcs, behavs = dvls[0].get_changes_in_string_list(dvls[0].EthBeh,
 inds[6]
 behavs[6]
 
+
+
+list(compress(cols, cats == behavs[0]))
+
+
 arcs[0]
 # assign relevant colours
 arc_colours = []
 for x in behavs:
     arc_colours.append(list(compress(cols,cats == x))[0])
+    arc_behaviours.append(x)
+
+len(cols)
+len(cats)
+
+cats
+
+beh_order = [behavs.index(x) for x in cats]
+
+sorted_behaviours = [x for _, x in sorted(zip(beh_order,cats))]
+
+
+beh_order = sorted(range(len(beh_order)), key=lambda k: beh_order[k])
+
+[cols[x] for x in beh_order]
+
+
+np.unique(behavs)
+behavs.index(cats[0])
+
+behavs.index(unique_behaviours[0])
+[next(x.index for x in behavs if x == b) for b in unique_behaviours]
+
+arc_colours
+arc_behaviours
+
+unique_behaviours = np.unique(arc_behaviours)
+beh_start_ind = []
+[np.where(behavs == x) for x in cats]
+
+for b in unique_behaviours:
+    print(np.where(behavs == b))
+
 
 fig, ax = plt.subplots(figsize=(6.4, 3.2))
 # set axes limits manually because Collections do not take part in autoscaling
