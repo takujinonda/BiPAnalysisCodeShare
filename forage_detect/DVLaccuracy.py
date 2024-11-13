@@ -72,9 +72,35 @@ dvls[0].plot_acc_behaviours('DZ')
 
 
 
-
+import numpy as np
 cats = np.unique(dvls[0].upsampled_beh.Behaviour)
-chg_idx, chg_str = dvls[0].get_changes_in_string_list(dvls[0].upsampled_beh.Behaviour)
+# convert all foraging into 'Forage' and all flight into 'FL'
+dvls[0].upsampled_beh["beh_simple"] = dvls[0].upsampled_beh.Behaviour
+# simplify foraging
+dvls[0].upsampled_beh.loc[(dvls[0].upsampled_beh.beh_simple == "s") | (dvls[0].upsampled_beh.beh_simple == "d"),'beh_simple'] = "Forage"
+# simplify flight
+dvls[0].upsampled_beh.loc[dvls[0].upsampled_beh.beh_simple == "CT",'beh_simple'] = "FL"
+chg_idx, chg_str = dvls[0].get_changes_in_string_list(dvls[0].upsampled_beh.beh_simple)
+
+import matplotlib.pyplot as plt
+plt.plot(dvls[0].acc.DZ.values)
+plt.plot(np.where(dvls[0].upsampled_beh.beh_simple == "Forage")[0],
+[1] * sum(dvls[0].upsampled_beh.beh_simple == "Forage"),'k+')
+plt.show()
+
+import numpy as np
+not_AT = np.where(dvls[0].upsampled_beh.beh_simple != "AT")[0]
+
+true_positive_forage_sample_rate = sum((dvls[0].EthBeh[not_AT] == 'Forage') * (dvls[0].upsampled_beh.beh_simple[not_AT] == 'Forage').values) / sum((dvls[0].upsampled_beh.beh_simple[not_AT] == 'Forage').values)
+
+false_positive_forage_sample_rate = sum((dvls[0].EthBeh[not_AT] != 'Forage') * (dvls[0].upsampled_beh.beh_simple[not_AT] == 'Forage').values) / sum((dvls[0].upsampled_beh.beh_simple[not_AT] != 'Forage').values)
+
+
+
+
+
+dvls[0].EthBeh[not_AT]
+len(dvls[0].EthBeh)
 test = dvls[0].EthBeh
 start = 0
 beh_present = []
