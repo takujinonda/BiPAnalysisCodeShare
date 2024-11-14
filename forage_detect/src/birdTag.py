@@ -185,7 +185,7 @@ class birdTag:
             print('Tag behaviours have not been read in')
 
         upsampled = self.dvl_beh[['Behaviour','Time']]
-        upsampled.loc[-1] = [upsampled.Behaviour.iloc[-1],upsampled.Time[0]+pd.Timedelta(2,'hour')]
+        upsampled.loc[-1] = [upsampled.Behaviour.iloc[-1],upsampled.Time[0]+pd.Timedelta(2,'hour') - pd.Timedelta(1/self.accfs,'s')]
         upsampled.reset_index(drop=True)
         upsampled = upsampled.resample(pd.Timedelta(50,'ms'),on='Time').last().ffill()
 
