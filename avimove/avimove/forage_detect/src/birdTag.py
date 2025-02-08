@@ -384,7 +384,8 @@ class birdTag:
     # separate etc, but for now just keep together
 
     def calculate_thresholds(
-            self
+            self,
+            threshold_scale: float = 1.5
             ) -> None:
         """
         Calculate all the required threshold for behaviour estimation.
@@ -400,7 +401,7 @@ class birdTag:
         # check if flight estimate median pitch range recorded
         if not hasattr(self, 'pitFL'):
             self.pitchPT()
-        return 1.5 * self.pitFL
+        return threshold_scale * self.pitFL
     
     @staticmethod
     def get_changes_in_string_list(
