@@ -1,0 +1,37 @@
+{
+    "parent_folder": {
+        "Darwin": "/Users/aran/Documents/DVL",
+        "Windows": "H:/My Drive/Data/DVL"
+    },
+    "class_folder": {
+        "Darwin":"/Users/aran/Library/CloudStorage/GoogleDrive-aran.garrod@googlemail.com/My Drive/Data/DVL/DiveBehavClass.csv",
+        "Windows":"H:/My Drive/Data/DVL/DiveBehavClass.csv"
+    },
+    "tags": {
+        "17008": {
+            "acc_start":"31/08/2018 06:00:00",
+            "vid_start":"31/08/2018 12:00:00",
+            "acc_names":["Y","Z","X"]
+        },
+        "18012": {
+            "acc_start":"31/08/2018 04:00:00",
+            "vid_start":"31/08/2018 10:00:00",
+            "acc_names":["Y","Z","X"]
+        },
+        "18014": {
+            "acc_start":"31/08/2018 06:00:00",
+            "vid_start":"31/08/2018 12:00:00",
+            "acc_names":["Y","Z","X"]
+        },
+        "18017": {
+            "acc_start":"31/08/2018 04:00:00",
+            "vid_start":"31/08/2018 11:00:00",
+            "acc_names":["Y","Z","X"]
+        },
+        "18018": {
+            "acc_start":"31/08/2018 04:00:00",
+            "vid_start":"31/08/2018 12:00:00",
+            "acc_names":["Y","Z","X"]
+        }
+    }
+}
