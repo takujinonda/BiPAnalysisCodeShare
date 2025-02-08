@@ -1,7 +1,7 @@
-import src.utils.analyseAcc as accFn
-import src.utils.analyseGPS as gpsFn
-import src.utils.DVLutils as dvlFn
-import src.utils.loadIn as load
+import avimove.forage_detect.src.utils.analyseAcc as accFn
+import avimove.forage_detect.src.utils.analyseGPS as gpsFn
+import avimove.forage_detect.src.utils.DVLutils as dvlFn
+import avimove.forage_detect.src.utils.loadIn as load
 import matplotlib.pyplot as plt
 import distinctipy
 import numpy as np
@@ -150,7 +150,6 @@ class birdTag:
             start_time = self.dvl_beh.Time.iloc[0]
             end_time = self.dvl_beh.Time.iloc[0] + dt.timedelta(hours=2)
             reg_date_range = pd.date_range(start = start_time, end=end_time, freq="1s")
-            import numpy as np
             reg_beh = np.repeat('not set',len(reg_date_range))
             from_ind = 0
             for idx,x in enumerate(self.dvl_beh.rounded_time[:-2]):
@@ -525,7 +524,11 @@ class birdTag:
             ax.plot(c.tolist()[0],[1] * c.shape[1],'k*')
             legend_obj = Line2D([],[],color='k',marker='*',linestyle='None')
             proxies.append(legend_obj)
-            sorted_behaviours = sorted_behaviours + ['Video foraging']
+            ax.plot(np.where(self.upsampled_beh.beh_simple=='AT')[0],
+            [-1]*sum(self.upsampled_beh.beh_simple=='AT'),'r*')
+            legend_obj = Line2D([],[],color='r',marker='*',linestyle='None')
+            proxies.append(legend_obj)
+            sorted_behaviours = sorted_behaviours + ['Video foraging','AT']
         leg = ax.legend(proxies, sorted_behaviours)
         # increase the width of the legend lines for legelibility
         for line in leg.get_lines():
@@ -538,7 +541,44 @@ class birdTag:
 
     def test_det_beh_agreement(
         self,
-        all_forg: bool = False
+        only_forage: bool = False
         ):
+        # convert all foraging into 'Forage' and all flight into 'FL'
+        self.upsampled_beh["beh_simple"] = self.upsampled_beh.Behaviour
+        # simplify foraging
+        self.upsampled_beh.loc[(self.upsampled_beh.beh_simple == "s") | (self.upsampled_beh.beh_simple == "d") | (self.upsampled_beh.beh_simple == "CT"),'beh_simple'] = "Forage"
+        chg_idx, chg_str = self.get_changes_in_string_list(self.upsampled_beh.beh_simple)
         # define the behaviours found in video
-        cats = np.unique(self.upsampled_beh.Behaviour)
+        cats = np.unique(self.upsampled_beh.beh_simple)
+
+        not_AT = np.where(self.upsampled_beh.beh_simple != "AT")[0]
+
+        true_positive_forage_sample_rate = sum((self.EthBeh[not_AT] == 'Forage') * (self.upsampled_beh.beh_simple[not_AT] == 'Forage')) / sum((self.EthBeh[not_AT] == 'Forage'))
+
+        false_positive_forage_sample_rate = sum((self.EthBeh[not_AT] == 'Forage') * (self.upsampled_beh.beh_simple[not_AT] != 'Forage')) / sum((self.EthBeh[not_AT] == 'Forage'))
+
+        # how many predicted forages have known foraging in them
+        pred_chg_idx, pred_chg_str = self.get_changes_in_string_list(self.upsampled_beh.beh_simple)
+
+        # which points are consecutive foraging
+        pred_forage_changes = np.where(pred_chg_str == 'Forage')[0]
+        foraging_present = []
+
+        # make copy of ethogram and remove values where bird pecked at tag
+        ethocopy = self.EthBeh
+        ethocopy[self.upsampled_beh.beh_simple == 'AT'] = 0
+        for idx in pred_forage_changes:
+            if idx == 0:
+                ethocopy[0:(pred_chg_idx[idx]+1)] == 'Forage'
+            else:
+                foraging_present.append(any(ethocopy[(pred_chg_idx[(idx-1)]-1):(pred_chg_idx[idx]+1)] == 'Forage'))
+                # if any(self.upsampled_beh.beh_simple[(pred_chg_idx[(idx-1)]-1):(pred_chg_idx[idx]+1)] == 'AT'):
+                #     foraging_present[-1] = np.nan
+
+        # remove NaNs
+        # foraging_present = list(compress(foraging_present,~np.isnan(foraging_present)))
+        # non_AT_bouts = len(foraging_present)
+        boutTPR = sum(foraging_present)/len(foraging_present)
+        boutFPR = sum([not x for x in foraging_present])/len(foraging_present)
+
+        return true_positive_forage_sample_rate, false_positive_forage_sample_rate, boutTPR, boutFPR
