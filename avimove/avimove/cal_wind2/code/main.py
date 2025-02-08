@@ -19,6 +19,9 @@ def get_args():
 
 
 def main():
+    # temporary minimize error suppression
+    np.seterr(invalid = 'ignore', over = 'ignore')
+
     args = get_args()
 
     data_url = args.data_url
