@@ -535,6 +535,12 @@ class birdTag:
 
     def plot_acc_behaviours(self, acc_sig, cols=None, plot_vid_forage: bool = True):
 
+        # check for simplified upsampled behaviours and generate if not present
+        if (not hasattr(self,'upsampled_beh')) and (self.tag_type == 'dvl'):
+            self.upsample_behaviours()
+        if (not hasattr(self.upsampled_beh,'beh_simple')) and (self.tag_type == 'dvl'):
+            self.test_det_beh_agreement()
+
         cats = np.unique(self.EthBeh)
         n_cats = len(cats)
         if cols is None:
@@ -623,12 +629,12 @@ class birdTag:
         true_positive_forage_sample_rate = sum(
             (self.EthBeh[not_AT] == "Forage")
             * (self.upsampled_beh.beh_simple[not_AT] == "Forage")
-        ) / sum((self.EthBeh[not_AT] == "Forage"))
+        ) / sum((self.EthBeh[not_AT] == "Forage")).item()
 
         false_positive_forage_sample_rate = sum(
             (self.EthBeh[not_AT] == "Forage")
             * (self.upsampled_beh.beh_simple[not_AT] != "Forage")
-        ) / sum((self.EthBeh[not_AT] == "Forage"))
+        ) / sum((self.EthBeh[not_AT] == "Forage")).item()
 
         # how many predicted forages have known foraging in them
         pred_chg_idx, pred_chg_str = self.get_changes_in_string_list(
