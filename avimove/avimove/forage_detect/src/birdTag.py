@@ -262,11 +262,11 @@ class birdTag:
         Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq` and `bout_gap` seconds, respectively. If the tag is DVL, flapping peaks/troughs will be found within estimate flight periods. This function requires a flight mask to be present.
         """
 
-        if not hasattr(self, "flight") & (self.tag_type == "dvl"):
+        if (not hasattr(self, "flight")) & (self.tag_type == "dvl"):
             print("Add estimated flight periods")
 
         if self.tag_type == "dvl":
-            self.flap, self.flap_bouts, self.flap_start, self.flap_end = accFn.flap(
+            self.flap, self.flap_bouts, self.flap_start, self.flap_end, self.flap_peaks, self.flap_troughs = accFn.flap(
                 sig=self.acc.Z,
                 fs=self.accfs,
                 bout_gap=10,
@@ -275,7 +275,7 @@ class birdTag:
                 flinds=self.flInds,
             )
         else:
-            self.flap, self.flap_bouts, self.flap_start, self.flap_end = accFn.flap(
+            self.flap, self.flap_bouts, self.flap_start, self.flap_end, self.flap_peaks, self.flap_troughs = accFn.flap(
                 sig=self.acc.Z, fs=self.accfs, bout_gap=10, flap_freq=4
             )
 
