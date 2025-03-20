@@ -13,10 +13,13 @@ def dtFormat(x):
         String of x in correct datetime format %Y-%m-%d %H:%M:%S.%f
     """
 
-    # extract all before '+'
-    out = re.findall('^(.*)\+',x)[0]
+    # extract all before '+' if present
+    if re.findall('^(.*)\+',x):
+        out = re.findall('^(.*)\+',x)[0]
+    else:
+        out = x
     # remove all non-datetime characters
-    out = re.sub('[^0-9 .:-]','',out)
+    out = re.sub('[^0-9/ .:-]','',out)
     if '.' not in out: # add milliseconds if not present (3 d.p.)
         out = out + '.000'
     if out.count('.') > 1:
@@ -31,7 +34,7 @@ def dtFormat(x):
 
     return out
 
-def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S", ): 
+def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%M:%S.%f", ): 
     """
     Read in AxyTrek GPS data (txt files) as output by X Manager
 
@@ -50,14 +53,22 @@ def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%
 
     # read in based on requested columns
     if cols.lower() == 'gps':
-        df = pd.read_csv(filename, sep = ",", header = 0, usecols = gpsCols)
+        try:
+            df = pd.read_csv(filename, sep = "\t", header = 0, usecols = gpsCols)
+        except ValueError as e:
+            if "Usecols do not match columns" in e:
+                df = pd.read_csv(filename, sep = ",", header = 0, usecols = gpsCols)
     elif cols.lower() == 'acc':
-        df = pd.read_csv(filename, sep = ",", header = 0, usecols = accCols)
+        try:
+            df = pd.read_csv(filename, sep = "\t", header = 0, usecols = accCols)
+        except ValueError as e:
+            if "Usecols do not match columns" in e:
+                df = pd.read_csv(filename, sep = ",", header = 0, usecols = accCols)
     else:
         df = pd.read_csv(filename, sep = ",", header = 0)
-    df = pd.read_csv(filename, sep = delim, usecols = cols)
-    df.DT = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
-    df['DT'] = pd.to_datetime(df['Date'] + " " + df['Time'], format = datetimeFormat)
+
+    df['DT'] = [dtFormat(x) for x in df.Timestamp] # ensure correct datetime formats
+    df['DT'] = pd.to_datetime(df['Timestamp'], format = datetimeFormat)
     return df.reset_index()
 
 def readBIP(filename,cols=None):
@@ -88,7 +99,7 @@ def readBIP(filename,cols=None):
     # rename columns for later use
     df.rename(columns = {'time':'DT','latitude':'lat','longitude':'lon','acceleration_longitudinal':'X','acceleration_lateral':'Y','acceleration_dorso_ventral':'Z','pressure':'pressure','temperature':'temp','height_above_mean_sea_level':'altitude','ground_speed':'spd'}, inplace = True)
     
-    df.DT = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
+    df['DT'] = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
     df['DT'] = pd.to_datetime(df['DT'], format = "%Y-%m-%d %H:%M:%S.%f")
 
     return df.reset_index()
