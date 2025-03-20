@@ -191,7 +191,9 @@ def find_gaps(signal, gap_size):
     return signal[starts],signal[ends]
 
 def peak_trough(sig):
-    """Extract peaks and troughs of signal `sig`. Will start with peak and end in trough to ensure equal size
+    """Extract peaks and troughs of signal `sig`.
+    
+    Will start with peak and end in trough to ensure equal size of outputs.
     """
     peaks,_ = find_peaks(sig)
     troughs,_ = find_peaks(-sig)
@@ -268,6 +270,10 @@ def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None
         Start indeces of flapping bouts.
     ends
         End indeces of flapping bouts.
+    flap_peaks
+        Indeces of flapping downstrokes.
+    flap_troughs
+        Indeces of flapping upstrokes.
     """
 
     if find_in_flight_periods:
@@ -281,8 +287,9 @@ def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None
     peaks,troughs,_ = peak_trough(sig)
     # retain only sufficiently large z displacements
     large_inds = np.absolute(sig[peaks].values - sig[troughs].values) > ipt
+    flap_peaks, flap_troughs = peaks[large_inds],troughs[large_inds]
     # convert to flapping indeces (of acc signal)
-    flap_inds = np.sort(np.concatenate([peaks[large_inds],troughs[large_inds]]))
+    flap_inds = np.sort(np.concatenate([flap_peaks,flap_troughs]))
     # find gaps between flap signals greater than twice the typical flapping frequency
     flap_mask = np.zeros(len(sig))
     start,end = find_gaps(flap_inds,2*fs/flap_freq)
@@ -294,10 +301,12 @@ def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None
     flap_bouts = np.zeros(len(sig))
     for x,y in zip(starts,ends):
         flap_bouts[x:y] = 1
-    return flap_mask.astype(int), flap_bouts.astype(int), starts, ends
+    return flap_mask.astype(int), flap_bouts.astype(int), starts, ends, flap_peaks, flap_troughs
 
 def flight_est_thresholds(acc,fl_inds):
-    """Define threshold values required for behaviour discrimination. Usage requires full acceleration data `acc` alongside indeces of estiamted flight periods `fl_inds`
+    """Define threshold values required for behaviour discrimination.
+    
+    Usage requires full acceleration data `acc` alongside indeces of estiamted flight periods `fl_inds`
     """
     pitVar = median([np.var(acc.pitch[x]) for x in fl_inds])
     pitFLmn = median([np.max(acc.pitMn[x]) for x in fl_inds])
