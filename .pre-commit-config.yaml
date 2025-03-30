@@ -1,0 +1,24 @@
+repos:
+    # Black formatting
+    - repo: https://github.com/psf/black
+      rev: 23.3.0
+      hooks:
+          - id: black
+
+    # Flake8 linting
+    -   repo: https://github.com/pycqa/flake8
+        rev: 6.0.0
+        hooks:
+        -   id: flake8
+
+    # Isort import sorting
+    - repo: https://github.com/pycqa/isort
+      rev: 5.11.2
+      hooks:
+          - id: isort
+
+    # Gitleaks secret detection
+    - repo: https://github.com/gitleaks/gitleaks
+      rev: v8.16.1
+      hooks:
+          - id: gitleaks
