@@ -30,7 +30,7 @@ def lowEquiFilt(sig, passband, stopband, fs):
     return static, dynamic
 
 # create static and dynamic (1 pass, 1.5 stop), pitch, ODBA
-def accFeatures(acc, long_acc_name, passb, stopb, fs):
+def accFeatures(acc, acc_name_format, passb, stopb, fs):
     """
     Generate acceleration features (pitch, ODBA, and their 10 second moving
     means)
@@ -39,7 +39,7 @@ def accFeatures(acc, long_acc_name, passb, stopb, fs):
     ----
     acc
         dataframe of acceleration signals.
-    long_acc_name
+    acc_name_format
         list of names for acceleration signals. Must conform to the following
         order - longitudinal (along body axis), dorsoventral (vertical axis),
         lateral.
@@ -60,9 +60,9 @@ def accFeatures(acc, long_acc_name, passb, stopb, fs):
     """
 
     # take acceleration signal names
-    sLong, dLong = lowEquiFilt(acc[long_acc_name[0]], passb, stopb, fs)
-    _, dZ = lowEquiFilt(acc[long_acc_name[1]], passb, stopb, fs)
-    _, dLat = lowEquiFilt(acc[long_acc_name[2]], passb, stopb, fs)
+    sLong, dLong = lowEquiFilt(acc[acc_name_format[0]], passb, stopb, fs)
+    _, dZ = lowEquiFilt(acc[acc_name_format[1]], passb, stopb, fs)
+    _, dLat = lowEquiFilt(acc[acc_name_format[2]], passb, stopb, fs)
 
     pitch = np.arcsin(np.clip(sLong,-1,1)) * 180/np.pi
     Odba = sum([np.abs(dLong),np.abs(dZ),np.abs(dLat)])
@@ -95,15 +95,15 @@ def hammingSpect(sig,fs=25):
 
     return f, t, Sxx
 
-def rollingSpecSum(sig,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
+def rollingSpecSum(sig,min_freq,max_freq,fs=25,dur=60,inclusive=False):
     """
-    Create a rolling sum of the difference between spectrogram intensities from minFreq to maxFreq and intensities above maxFreq, , i.e. summed values between 3 and 5 Hz - summed values above 5 Hz.
+    Create a rolling sum of the difference between spectrogram intensities from min_freq to max_freq and intensities above max_freq, , i.e. summed values between 3 and 5 Hz - summed values above 5 Hz.
     
     Args:
         spec:       spectrogram object.
         f:          array of sample frequencies.
-        minFreq:    minimum frequency for sum (Hz).
-        maxFreq:    maximum frequency for sum (Hz).
+        min_freq:    minimum frequency for sum (Hz).
+        max_freq:    maximum frequency for sum (Hz).
         fs:         spectrogram sampling frequency (Hz). Defaults to 25.
         dur:        rolling sum duration (s).
         inclusive:  should boundaries be included. Defaults to False.
@@ -113,12 +113,19 @@ def rollingSpecSum(sig,minFreq,maxFreq,fs=25,dur=60,inclusive=False):
     """
     f,_,spec = hammingSpect(sig,fs)
     if inclusive:
-        spectDiff = pd.Series(np.sum(spec[(f >= minFreq) & (f <= maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
+        spectDiff = pd.Series(np.sum(spec[(f >= min_freq) & (f <= max_freq),:],axis=0) - np.sum(spec[f > max_freq,:],axis=0))
     else:
-        spectDiff = pd.Series(np.sum(spec[(f > minFreq) & (f < maxFreq),:],axis=0) - np.sum(spec[f > maxFreq,:],axis=0))
+        spectDiff = pd.Series(np.sum(spec[(f > min_freq) & (f < max_freq),:],axis=0) - np.sum(spec[f > max_freq,:],axis=0))
     return spectDiff.rolling(dur*fs, closed = "both", min_periods = 1).sum()
 
-def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
+def maxWithGap(
+    sig,
+    fs,
+    window=60,
+    min_gap=5,
+    num_points = 20,
+    rel_scale = 2,
+    ):
     """
     Calculate the highest values across time-series signal `sig` with a minimum time gap between
     
@@ -126,20 +133,26 @@ def maxWithGap(sig,fs,window=60,minGap=5,numPoints = 20):
         sig:        signal whose largest values are to be found.
         fs:         signal sampling frequency (Hz).
         windows:    duration of moving window over which to search (mins). Defaults to 1.
-        minGap:     minimum time gap between largest values (mins). Defaults to 5.
-        numPoints:  number of 'max points' to be found. Defaults to 20.
+        min_gap:    minimum time gap between largest values (mins). Defaults to 5.
+        num_points: number of 'max points' to be found. Defaults to 20.
+        rel_scale:  the relative scale of the input signal to desired index. Default 2.
 
     Returns:
-        List of length numPoints of ranges indicating indeces of highest values within sig.        
+        List of length num_points of ranges indicating indeces of highest values within sig.        
     """
-    out = []
+    out = np.zeros(shape=(num_points,window*fs)).astype(int)
     sigad = sig.copy()
-    while len(out) != numPoints:
+    for idx in range(out.shape[0]):
         # create index range around highest value
-        out.append(np.arange(np.argmax(sigad) - round(fs*window/2) + fs*2,
-                  np.argmax(sigad) + round(fs*window/2)) + fs*2)
+        out[idx] = np.arange(np.argmax(sigad)*rel_scale - (round(fs*window/2)),
+            (np.argmax(sigad)*rel_scale + round(fs*window/2)))
         # reduce magnitude of this period and 5 minutes surrounding
-        sigad[np.arange(np.max([0,np.argmax(sigad) - round(fs*window/2) - (fs*60*minGap)]),np.min([len(sigad),np.argmax(sigad) + round(fs*window/2) + (fs*60*minGap)]))] = np.min(sigad)
+        sigad[
+            np.arange(
+                np.max([0,np.argmax(sigad) - round(fs*window/2) - (fs*60*min_gap)]),
+                np.min([len(sigad),np.argmax(sigad) + round(fs*window/2) + (fs*60*min_gap)])
+                )
+            ] = np.min(sigad)
     return out
 
 def reduceErroneous(signal,behav_data,dt,fs,gap=30,cat='AT'):
@@ -164,12 +177,51 @@ def reduceErroneous(signal,behav_data,dt,fs,gap=30,cat='AT'):
         sigad.loc[behAT[(2*fs):-(2*fs)+1]] = min(sigad)
     return sigad
 
-def flightestimate(signal,rollSum,fs,behav_data=None,dt=None,gap=30,cat='AT',removeErr=False,window=60,minGap=5,numPoints=20):
-    """Estimate flight periods from dorsoventral acceleration. Flight is estimated by comparing frequencies within the `low` to `high` domain to `high`+. If `removeErr` is True, remove erroneous periods within a `gap`. The `numPoints` most likely `window` second periods of flight are extracted with at least `minGap` minutes inbetween.
+def flightestimate(
+    signal,
+    roll_sum,
+    fs,
+    dt=None,
+    window=60,
+    min_gap=5,
+    num_points=20,
+    remove_err=False,
+    behav_data=None,
+    cat='AT',
+    removal_period=30,
+    ) -> tuple[list[float], list[int]]:
+    """Estimate flight periods from dorsoventral acceleration.
+    Flight is estimated by comparing frequencies within the `low` to `high`
+    domain to `high`+. If `remove_err` is True, remove erroneous periods within
+    a `gap`. The `num_points` most likely periods of flight are extracted with
+    at least `min_gap` minutes inbetween.
+    
+    Parameters
+    ----------
+    signal
+        Dorsoventral acceleration signal.
+    roll_sum
+        Rolling sum of dorsoventral acceleration frequency content.
+    fs
+        Sampling frequency (Hz).
+    dt
+        Concurrent datetime of dorsoventral acceleration.
+    window
+        Estimated flight periods (seconds).
+    min_gap
+        Minimum time gap (minutes) between estimated flight periods.
+    remove_err
+        Should erroneous behaviour periods be removed.
+    behav_data
+        Optional extra behaviour data for removal of erroneous periods.
+    cat
+        Category of behaviour assigned as erroneous.
+    removal_period
+        Window (seconds) from erroneous behaviour to be removed.
     """
-    if removeErr:
-        rollSum = reduceErroneous(rollSum,behav_data,dt,fs,gap,cat)
-    out = maxWithGap(rollSum,fs,window,minGap,numPoints)
+    if remove_err:
+        roll_sum = reduceErroneous(roll_sum,behav_data,dt,fs,removal_period,cat)
+    out = maxWithGap(roll_sum,fs,window,min_gap,num_points)
     flight = np.zeros(len(signal))
     for x in out:
         flight[x] = 1
@@ -229,6 +281,7 @@ def peak_trough_in_flight(sig,fl_inds):
     """
 
     peaks,troughs,_ = peak_trough(sig)
+    
     flpeaks = []
     fltroughs = []
     for inds in fl_inds:
@@ -244,9 +297,19 @@ def peak_trough_in_flight(sig,fl_inds):
     troughs = flatten(fltroughs)
     return peaks, troughs
 
-def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None):
-    """
-    Find flapping signals in dorosventral signal `sig`. Flapping is extracted through peak-trough differences being greater than the inter-peak trough of the signal magnitude differences between maxima. These 'large' peaks and troughs are then grouped if they occur within half the typical flapping frequency `flap_freq`.
+def flap(
+    sig,
+    fs,
+    bout_gap=30,
+    flap_freq=4,
+    find_in_flight_periods=False,
+    flinds=None
+    ):
+    """Find flapping signals in dorosventral signal `sig`.
+    Flapping is extracted through peak-trough differences being greater than the
+    inter-peak trough of the signal magnitude differences between maxima. These
+    'large' peaks and troughs are then grouped if they occur within half the
+    typical flapping frequency `flap_freq`.
 
     Parameters
     ----------
@@ -257,7 +320,8 @@ def flap(sig,fs,bout_gap=30,flap_freq=4,find_in_flight_periods=False,flinds=None
     flap_freq
         Typical expected frequency of flapping (Hz).
     bout_gap
-        Maximum gap between segments to separate from 'glides' and group flapping periods into bouts.
+        Maximum gap between segments to separate from 'glides' and group
+        flapping periods into bouts.
 
 
     Returns:

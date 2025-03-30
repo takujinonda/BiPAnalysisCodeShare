@@ -2,15 +2,22 @@ import pandas as pd
 import re
 
 def dtFormat(x):
-    """
-    Format incoming datetimes from BiP system. Typically datetimes are brought in the format YYYY-mm-dd HH:MM:SS+00:00, however, SS can contain decimal values or not. This function returns the same datetime in string format with a decimal place added if none is originally present and removes '+00:' from the string so that datetimes can be converted to datetime format in Pandas.
+    """Format incoming datetimes from BiP system.
+    Typically datetimes are brought in the format YYYY-mm-dd HH:MM:SS+00:00,
+    however, SS can contain decimal values or not. This function returns the
+    same datetime in string format with a decimal place added if none is
+    originally present and removes '+00:' from the string so that datetimes can
+    be converted to datetime format in Pandas.
 
-    Args:
+    Parameters
+    ----------
+    x
+        datetime in string format
+
+    Returns
+    -------
+    String of x in correct datetime format %Y-%m-%d %H:%M:%S.%f
     
-        x:  datetime in string format
-
-    Returns:
-        String of x in correct datetime format %Y-%m-%d %H:%M:%S.%f
     """
 
     # extract all before '+' if present
@@ -38,14 +45,26 @@ def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%
     """
     Read in AxyTrek GPS data (txt files) as output by X Manager
 
-    Args:
+    Parameters
+    ----------
+    filename
+        path to AxyTrek txt file
+    cols:   
+        string to denote if acceleration and GPS ('acc') or GPS only ('gps') should be read in
+    colnames
+        list of string column names to be assigned. Must be of same length as cols. Defaults to ['Date', 'Time', 'lat', 'lon']
 
-        filename:   path to AxyTrek txt file
-        cols:       string to denote if acceleration and GPS ('acc') or GPS only ('gps') should be read in
-        colnames:   list of string column names to be assigned. Must be of same length as cols. Defaults to ['Date', 'Time', 'lat', 'lon']
-
-    Returns:
-        Pandas dataframe of columns `colnames`. A formatted DateTime column (named DT) is generated.
+    Returns
+    -------
+    If 'gps' cols passed, single Pandas dataframe of datetime, latitude, and
+    longitude. 
+    If 'acc' cols passed, two Pandas dataframes returned, first an acceleration
+    dataframe of formatted datetime (DT), latitude (lat), longitude (lon),
+    longitudinal acceleration (X), lateral acceleration (Y), and dorsoventral
+    acceleration (Z). Second, a 'gps' formatted dataframe as above.
+    If no cols argument given, all data is read in, including pressure
+    (pressure), temperature (temp), height about sea level (altitude), and
+    ground speed (spd).
     """
 
     accCols = ['Timestamp','X','Y','Z']
@@ -54,55 +73,153 @@ def readAxy(filename, delim = "\t", cols = None, datetimeFormat = "%d/%m/%Y %H:%
     # read in based on requested columns
     if cols.lower() == 'gps':
         try:
-            df = pd.read_csv(filename, sep = "\t", header = 0, usecols = gpsCols)
+            df = pd.read_csv(filename, sep = delim, header = 0, usecols = gpsCols)
+            df.dropna(inplace=True)
+            df.reset_index(inplace=True)
         except ValueError as e:
             if "Usecols do not match columns" in e:
                 df = pd.read_csv(filename, sep = ",", header = 0, usecols = gpsCols)
+                df.dropna(inplace=True)
+                df.reset_index(inplace=True)
+        df.rename(columns={'location-lat':'lat','location-lon':'lon'},inplace=True)
     elif cols.lower() == 'acc':
         try:
-            df = pd.read_csv(filename, sep = "\t", header = 0, usecols = accCols)
+            df = pd.read_csv(filename, sep = delim, header = 0,
+                             usecols = list(set(accCols + gpsCols))
+                             )
         except ValueError as e:
             if "Usecols do not match columns" in e:
-                df = pd.read_csv(filename, sep = ",", header = 0, usecols = accCols)
+                df = pd.read_csv(filename, sep = ",", header = 0,
+                                 usecols = list(set(accCols + gpsCols))
+                                 )
     else:
         df = pd.read_csv(filename, sep = ",", header = 0)
 
     df['DT'] = [dtFormat(x) for x in df.Timestamp] # ensure correct datetime formats
     df['DT'] = pd.to_datetime(df['Timestamp'], format = datetimeFormat)
-    return df.reset_index()
+    
+    # split into acc/gps if acc requested
+    if cols == 'acc':
+        new_acc_cols = [
+            'DT',
+            'lat',
+            'lon',
+            'X',
+            'Y',
+            'Z',
+            ]
+        new_gps_cols = [
+            'DT',
+            'lat',
+            'lon',
+        ]
+        accdf = df[new_acc_cols]
+        gpsdf = df[new_gps_cols]
+        gpsdf.dropna().reset_index()
+        
+        return accdf, gpsdf
+    
+    else:
+    
+        return df
 
-def readBIP(filename,cols=None):
+def readBiP(filename,cols=None):
     """
     Read in BiP-formatted data
 
-    Args:
+    Parameters
+    ----------
+    filename
+        string of full path to file.
+    cols
+        string value indicating if number of columns to read in can be reduced.
+        For GPS and acceleration, use 'acc', for GPS only, use 'gps'. Defaults
+        to None.
 
-        filename:   string of full path to file
-        cols:       string value indicating if number of columns to read in can be reduced. For GPS and acceleration, use 'acc', for GPS only, use 'gps'. Defaults to None.
-
-    Returns:
-        Pandas dataframe of BIP system formatted data. Columns returned depend on `cols` argument. 'acc' returns formatted datetime (DT), latitude (lat), longitude (lon), longitudinal acceleration (X), lateral acceleration (Y), and dorsoventral acceleration (Z). 'gps' returns datetime, latitude, and longitude. If no cols argument given, all data is read in, including pressure (pressure), temperature (temp), height about sea level (altitude), and ground speed (spd).
+    Returns
+    -------
+    If 'gps' cols passed, single Pandas dataframe of datetime, latitude, and
+    longitude. 
+    If 'acc' cols passed, two Pandas dataframes returned, first an acceleration
+    dataframe of formatted datetime (DT), latitude (lat), longitude (lon),
+    longitudinal acceleration (X), lateral acceleration (Y), and dorsoventral
+    acceleration (Z). Second, a 'gps' formatted dataframe as above.
+    If no cols argument given, all data is read in, including pressure
+    (pressure), temperature (temp), height about sea level (altitude), and
+    ground speed (spd).
     """
 
-    accCols = ['time','latitude','longitude','acceleration_longitudinal','acceleration_lateral','acceleration_dorso_ventral']
-    gpsCols = ['time','latitude','longitude']
+    accCols = [
+        'time',
+        'latitude',
+        'longitude',
+        'acceleration_longitudinal',
+        'acceleration_lateral',
+        'acceleration_dorso_ventral'
+        ]
+    gpsCols = [
+        'time',
+        'latitude',
+        'longitude'
+        ]
 
     # read in based on requested columns
     if cols.lower() == 'gps':
         df = pd.read_csv(filename, sep = ",", header = 0, usecols = gpsCols)
+        df.dropna(inplace=True)
+        df.reset_index(inplace=True)
     elif cols.lower() == 'acc':
-        df = pd.read_csv(filename, sep = ",", header = 0, usecols = accCols)
+        df = pd.read_csv(
+            filename, sep = ",", header = 0,
+            usecols = list(set(accCols + gpsCols))
+            )
     else:
         df = pd.read_csv(filename, sep = ",", header = 0)
          
     # df = pd.read_csv(filename, sep = ",", header = 0, usecols = cols)
     # rename columns for later use
-    df.rename(columns = {'time':'DT','latitude':'lat','longitude':'lon','acceleration_longitudinal':'X','acceleration_lateral':'Y','acceleration_dorso_ventral':'Z','pressure':'pressure','temperature':'temp','height_above_mean_sea_level':'altitude','ground_speed':'spd'}, inplace = True)
+    df.rename(
+        columns = {
+            'time':'DT',
+            'latitude':'lat',
+            'longitude':'lon',
+            'acceleration_longitudinal':'X',
+            'acceleration_lateral':'Y',
+            'acceleration_dorso_ventral':'Z',
+            'pressure':'pressure',
+            'temperature':'temp',
+            'height_above_mean_sea_level':'altitude',
+            'ground_speed':'spd'},
+        inplace = True
+        )
     
     df['DT'] = [dtFormat(x) for x in df.DT] # ensure correct datetime formats
     df['DT'] = pd.to_datetime(df['DT'], format = "%Y-%m-%d %H:%M:%S.%f")
 
-    return df.reset_index()
+    # split into acc/gps if acc requested
+    if cols == 'acc':
+        new_acc_cols = [
+            'DT',
+            'lat',
+            'lon',
+            'X',
+            'Y',
+            'Z',
+            ]
+        new_gps_cols = [
+            'DT',
+            'lat',
+            'lon',
+        ]
+        accdf = df[new_acc_cols]
+        gpsdf = df[new_gps_cols]
+        gpsdf.dropna().reset_index()
+        
+        return accdf, gpsdf
+    
+    else:
+        
+        return df
 
 def readDVL(filename,accStart,fs,vidStart=None,vidOnlyPeriod=False):
     """

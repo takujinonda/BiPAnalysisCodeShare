@@ -12,8 +12,8 @@ pd.options.mode.chained_assignment = None
 import datetime as dt
 from typing import Union
 
-from math import pi
-from statistics import median, mean
+from mpl_toolkits.basemap import Basemap
+from statistics import median
 from typing import Union
 from matplotlib.lines import Line2D
 from matplotlib.collections import LineCollection
@@ -37,8 +37,7 @@ class birdTag:
         tag_type: str,
         tagname: str,
         accfs: int,
-        long_acc_name: Union[str, None] = None,
-        gps_fixes_per_minute: Union[int, None] = None,
+        acc_name_format: Union[str, None] = None,
         accStart: Union[np.datetime64, None] = None,
         vidStart: Union[np.datetime64, None] = None,
         *args,
@@ -56,12 +55,10 @@ class birdTag:
             Tag identifier
         accfs
             Acceleration sampling frequency (Hz).
-        long_acc_name
+        acc_name_format
             list of names for acceleration signals. Must conform to the
             following order - longitudinal (along body axis), dorsoventral
             (vertical axis), lateral
-        gps_fixes_per_minute
-            Number of expected GPS fixes per minute
         accStart
             DateTime start of acceleration signal recording
         vidStart
@@ -71,8 +68,7 @@ class birdTag:
         self.tag_type = tag_type.casefold()
         self.tagname = tagname
         self.accfs = accfs
-        self.gps_fixes_per_minute = gps_fixes_per_minute
-        self.long_acc_name = long_acc_name
+        self.acc_name_format = acc_name_format
         self.accStart = pd.to_datetime(accStart, format="%d/%m/%Y %H:%M:%S")
         if vidStart is not None:
             vidStart = pd.to_datetime(vidStart, format="%d/%m/%Y %H:%M:%S")
@@ -114,11 +110,11 @@ class birdTag:
 
     def readin(self, vidOnlyPeriod: bool = True) -> None:
         if self.tag_type == "axy":
-            self.gps = load.readAxy(self.filepath, cols="gps").reset_index()
-            self.acc = load.readAxy(self.filepath, cols="acc").reset_index()
+            self.gps = load.readAxy(self.filepath, cols="gps")
+            self.acc = load.readAxy(self.filepath, cols="acc")
         if self.tag_type == "bip":
-            self.gps = load.readBiP(self.filepath, col="gps").reset_index()
-            self.acc = load.readBiP(self.filepath, col="acc").reset_index()
+            self.gps = load.readBiP(self.filepath, cols="gps")
+            self.acc = load.readBiP(self.filepath, cols="acc")
         if self.tag_type == "dvl":
             self.acc = load.readDVL(
                 self.filepath,
@@ -131,6 +127,58 @@ class birdTag:
     def readBeh(self, behavPath: str) -> None:
         self.dvl_beh = dvlFn.readBeh(behavPath, self.tagname)
 
+    def remove_near(
+        self,
+        home_site,
+        dist_threshold = 1.5
+    ) -> None:
+        """Identify and remove data near a specified location.
+        Both acceleration and GPS data will be removed for
+        positions/accelerometer data found within threshold distance of
+        home_site.
+        
+        Parameters
+        ----------
+        home_site
+            Location to find nearby data (lat, lon - decimal degrees).
+        dist_threshold
+            Distance within which to identify data points.    
+        """
+        acc_inds = gpsFn.removeNear(
+            acc_data=self.acc,
+            gps_data=self.gps,
+            captureSite=home_site,
+            distThreshold=dist_threshold,
+        )
+        
+        # remove acceleration data
+        self.acc.drop(acc_inds, inplace=True)
+        self.acc.reset_index(inplace=True)
+        # repeat for GPS data
+        self.gps.drop(set(acc_inds).intersection(set(self.gps.index)),inplace=True)
+        self.gps.reset_index(inplace=True,drop=True) # gps data already has an index reference
+    
+    def dist_speed(
+        self,
+        threshold = None
+    ) -> None:
+        """Calculate distance and speed with optional maximum speed threshold.
+        Speed and distance added as attributes.
+        
+        Parameters
+        ----------
+        threshold
+            Optional maximum speed threshold (m/s). If exceeded, suspect GPS
+            positions are removed and speed recalculated until no more threshold
+            breaches remain.
+        """
+        self.dist, self.speed = gpsFn.distSpeed(
+            lat=self.gps.lat,
+            lon=self.gps.lon,
+            DT=self.gps.DT,
+            threshold=threshold
+        )
+        
     @staticmethod
     def round_seconds(obj: dt.datetime) -> dt.datetime:
         """
@@ -203,46 +251,46 @@ class birdTag:
             print("No acceleration data present")
         else:
             out = accFn.accFeatures(
-                self.acc, self.long_acc_name, passband, stopband, self.accfs
+                self.acc, self.acc_name_format, passband, stopband, self.accfs
             )
             out.index = self.acc.index
             self.acc = pd.concat([self.acc, out], axis=1)
 
-    def rollSum(self, minfreq: float = 3.0, maxfreq: float = 5.0) -> None:
+    def roll_sum(self, min_freq: float = 3.0, max_freq: float = 5.0) -> None:
         """ """
         self.rolling_freq_sum = accFn.rollingSpecSum(
-            self.acc.Z,
-            minFreq=minfreq,
-            maxFreq=maxfreq,
+            sig=self.acc.Z,
+            min_freq=min_freq,
+            max_freq=max_freq,
             fs=self.accfs,
             dur=60,
             inclusive=False,
         )
 
-    def flight_est(self, numPoints: int, removeErr: bool = False) -> None:
-        # check if rollSum calculation has been performed
+    def flight_est(self, num_points: int, remove_err: bool = False) -> None:
+        # check if roll_sum calculation has been performed
         if not hasattr(self, "rolling_freq_sum"):
             print("Performing spectral rolling sum")
-            self.rollSum()
+            self.roll_sum()
 
         # if dvl tag, reduce magnitude of erroneous category
-        if (self.tag_type == "dvl") & removeErr:
+        if (self.tag_type == "dvl") & remove_err:
             self.flInds, self.flight = accFn.flightestimate(
                 signal=self.acc.Z,
-                rollSum=self.rolling_freq_sum,
+                roll_sum=self.rolling_freq_sum,
                 fs=self.accfs,
                 behav_data=self.dvl_beh,
                 dt=self.acc.DT,
-                removeErr=removeErr,
-                numPoints=numPoints,
+                remove_err=remove_err,
+                num_points=num_points,
             )
         else:
             self.flInds, self.flight = accFn.flightestimate(
                 signal=self.acc.Z,
-                rollSum=self.rolling_freq_sum,
+                roll_sum=self.rolling_freq_sum,
                 fs=self.accfs,
                 dt=self.acc.DT,
-                numPoints=numPoints,
+                num_points=num_points,
             )
 
     def flight_thresholds(self) -> None:
@@ -258,8 +306,12 @@ class birdTag:
         return [x for xs in xss for x in xs]
 
     def flapping(self):
-        """
-        Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq` and `bout_gap` seconds, respectively. If the tag is DVL, flapping peaks/troughs will be found within estimate flight periods. This function requires a flight mask to be present.
+        """Estimate flapping and gliding behaviour.
+        Calculate mask of flapping behaviour and 'bouts', grouped by `flap_freq`
+        and `bout_gap` seconds, respectively. If the tag is DVL, flapping
+        peaks/troughs will be found within estimate flight periods. This
+        function requires a flight mask to be present.
+        Glides are assigned during flap bouts but when flapping not assigned.
         """
 
         if (not hasattr(self, "flight")) & (self.tag_type == "dvl"):
@@ -278,6 +330,8 @@ class birdTag:
             self.flap, self.flap_bouts, self.flap_start, self.flap_end, self.flap_peaks, self.flap_troughs = accFn.flap(
                 sig=self.acc.Z, fs=self.accfs, bout_gap=10, flap_freq=4
             )
+        # define a glide mask too
+        self.glide = ((self.flap == 0) & (self.flap_bouts == 1)).astype(int)
 
     def pitchPT(self) -> None:
         """
@@ -302,7 +356,7 @@ class birdTag:
                 self.accFeatures()
             if not hasattr(self, "rolling_freq_sum"):
                 print("Rolling spectral sum not calculated\nRunning now...")
-                self.rollSum()
+                self.roll_sum()
             if not hasattr(self, "flight"):
                 print("Flight not calculated\nRunning now...")
                 self.flight_est()
@@ -452,7 +506,7 @@ class birdTag:
         if not hasattr(self, "flInds"):
             print("Estimating flight periods")
             if self.tag_type == "dvl":
-                self.flight_est(numPoints=10, removeErr=True)
+                self.flight_est(num_points=10, remove_err=True)
         # check if flight estimate median pitch range recorded
         if not hasattr(self, "pitFL"):
             self.pitchPT()
@@ -533,13 +587,13 @@ class birdTag:
         """
         return Line2D([0, 1], [0, 1], color=color, **kwargs)
 
-    def plot_acc_behaviours(self, acc_sig, cols=None, plot_vid_forage: bool = True):
+    def plot_acc_behaviours(self, acc_sig, cols=None, plot_vid_forage: bool = False):
 
         # check for simplified upsampled behaviours and generate if not present
         if (not hasattr(self,'upsampled_beh')) and (self.tag_type == 'dvl'):
             self.upsample_behaviours()
-        if (not hasattr(self.upsampled_beh,'beh_simple')) and (self.tag_type == 'dvl'):
-            self.test_det_beh_agreement()
+            if (not hasattr(self.upsampled_beh,'beh_simple')) and (self.tag_type == 'dvl'):
+                self.test_det_beh_agreement()
 
         cats = np.unique(self.EthBeh)
         n_cats = len(cats)
@@ -552,7 +606,7 @@ class birdTag:
             )
         # generate behaviour-based line collections
         inds, arcs, behavs = self.get_lines_from_string_list(
-            string_list=self.EthBeh, line_list=getattr(self.acc, acc_sig)
+            string_list=self.EthBeh, line_list=self.acc[acc_sig]
         )
         # assign relevant colours
         arc_colours = []
@@ -573,7 +627,7 @@ class birdTag:
         sorted_behaviours = [x for _, x in sorted(zip(beh_order, cats))]
         sorted_cols = [x for _, x in sorted(zip(beh_order, cols))]
         ax.set_ylim(
-            np.min(getattr(self.acc, acc_sig)), np.max(getattr(self.acc, acc_sig))
+            np.min(self.acc[acc_sig]), np.max(self.acc[acc_sig])
         )
         # generate legend objects
         proxies = [self.make_proxy(x, linewidth=1) for x in sorted_cols]
@@ -607,6 +661,31 @@ class birdTag:
         ax.title.set_text(f"{self.tagname} estimated behaviours")
 
         plt.show()
+    
+    def plot_forage_locations(
+        self,
+        projection: str = 'gall',
+        buffer_lat: int = 5,
+        buffer_lon: int = 5,
+    ):
+        """Plot predicted foraging locations.
+        Ethogram is required to run this. A global map coastline will be plotted
+        and the plot will show the max/min lat lon values + some optional buffer
+        (default 5).
+        
+        Parameters
+        ----------
+        projection
+            Basemap projection string.
+        buffer_lat
+            Buffer for latitude plotting in decimal degrees. Default 5.
+        buffer_lon
+            Buffer for longitude plitting in decimal degrees. Default 5.
+        """
+        m = Basemap(
+            projection=projection,
+        )
+        
 
     def test_det_beh_agreement(self, only_forage: bool = False):
         # convert all foraging into 'Forage' and all flight into 'FL'

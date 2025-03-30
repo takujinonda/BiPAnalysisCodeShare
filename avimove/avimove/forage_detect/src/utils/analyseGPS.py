@@ -1,3 +1,7 @@
+import numpy as np
+from geopy import distance
+from scipy import stats
+
 def gps_distanceSingle(longitudes, latitudes, latVal, lonVal):                                                                       
     # taken from https://www.tjansson.dk/2021/03/vectorized-gps-distance-speed-calculation-for-pandas/, thanks to Thomas Jansson for use of this function
     """                                                                                                                 
@@ -57,7 +61,12 @@ def gps_speed(longitudes, latitudes, timestamps):
     dist = np.insert(dist, 0, np.nan, axis=0)                                                               
     return dist,speed
 
-def distSpeed(lat,lon,DT,threshold=None):
+def distSpeed(
+    lat,
+    lon,
+    DT,
+    threshold=None
+    ):
     """
     Calculates distances (metres) and speed (m/s) of GPS positions and datetime information. Uses a speed threshold (default None) to define erroneous GPS positions. GPS and datetime lengths must agree.
 
@@ -70,22 +79,25 @@ def distSpeed(lat,lon,DT,threshold=None):
     Returns:
         Float arrays of distance and speed values.
     """
-
-    dist,speed = gps_speed(lat,lon,DT)
+    lat_copy=lat.copy()
+    lon_copy=lon.copy()
+    
+    dist,speed = gps_speed(lat_copy,lon_copy,DT)
+    
     if threshold is not None:
 
         while np.nanmax(speed) > threshold:
 
             # remove erroneous GPS values
-            lon[speed > threshold] = np.nan
-            lat[speed > threshold] = np.nan
+            lon_copy[speed > threshold] = np.nan
+            lat_copy[speed > threshold] = np.nan
 
             # recalculate speed
-            dist,speed = gps_speed(lat,lon,DT)
+            dist,speed = gps_speed(lat_copy,lon_copy,DT)
     
     return dist,speed
 
-def removeNear(data, captureSite, distThreshold = 1.5):
+def removeNear(acc_data, gps_data, captureSite, distThreshold = 1.5):
     """
     Remove acceleration and GPS data captured within a set distance of the capture site.
 
@@ -95,20 +107,20 @@ def removeNear(data, captureSite, distThreshold = 1.5):
         distThreshold:  desired distance threshold from capture site in km. Defaults to 1.5.
 
     Returns:
-        Pandas dataframe of similar format as data with all points located within distThreshold of captureSite removed.
+        Indices to drop for acceleration sampling rates.
     """
     # highest data sample rate (Hz)
-    fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(data.DT),keepdims=False)[0])
+    fs = int(np.timedelta64(1,'s') / stats.mode(np.diff(acc_data.DT),keepdims=False)[0])
 
     # GPS sample rate (fixes per minute)
-    gpsFS = 60/int(np.timedelta64(1,'m') / stats.mode(np.diff(data.dropna()['DT']),keepdims=False)[0])
+    gpsFS = 60/int(np.timedelta64(1,'m') / stats.mode(np.diff(gps_data['DT']),keepdims=False)[0])
 
     # find distances from capture site
-    capSiteDist = np.array(gps_distanceSingle(data.lon.dropna(),data.lat.dropna(),captureSite[0],captureSite[1]))
+    capSiteDist = np.array(gps_distanceSingle(gps_data.lon,gps_data.lat,captureSite[0],captureSite[1]))
 
-    inds = data.lat.dropna().index[np.where(capSiteDist < distThreshold)[0]] # find indeces to be removed from original dataset
+    inds = gps_data.lat.index[np.where(capSiteDist < distThreshold)[0]] # find indices to be removed from original dataset
 
-    # if any difference in GPS and acc sampling rates means we must extend GPS indeces
+    # if any difference in GPS and acc sampling rates means we must extend GPS indices
     samplerDiff = int(np.floor(fs * gpsFS / 2)) # number of fs samples either side of GPS position
 
     # create ranges to be removed
@@ -116,5 +128,8 @@ def removeNear(data, captureSite, distThreshold = 1.5):
     for x in inds:
         rem.extend(np.arange(x - samplerDiff, x + samplerDiff))
     rem = np.array(rem)
+    # remove any indices beyond the length of the acceleration data
+    rem = rem[rem >= 0]
+    rem = rem[rem < len(acc_data)]
 
-    return data.drop(rem)
+    return rem
