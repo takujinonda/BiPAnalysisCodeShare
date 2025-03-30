@@ -15,7 +15,7 @@ $ DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -t -i docker.io/library/av
 ## Other than Apple Silicon
 ### build the image
 ```
-$ docker build --no-cache -t avi_analyse .
+$ docker build --no-cache -t avi_analyse avi_analyse/
 ```
 
 ### go inside the built docker image
@@ -38,5 +38,5 @@ You need to provide data_url for the url of csv file to read in the pandas read_
 | saveloc | Path to desired save location. If none passed, outputs saved to current working directory |
 
 ```
-$ python run_analysis.py -url data_url --tag-name tag4_2021 --flap-glide --wind --remove-location 39.400 141.998 --remove-distance 5 --spthresh 90 -- saveloc /path/to/my/desired/location/
+$ python run_analysis.py -url data_url --tag-name tag4_2021 --flap-glide --wind --remove-location 39.400 141.998 --remove-distance 5 --speed-threshold 90 --saveloc /path/to/my/desired/location/
 ```
