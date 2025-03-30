@@ -71,9 +71,9 @@ def parse_arguments():
         "-spthresh",
         "--speed-threshold",
         type=float,
-        default=80,
+        default=24,
         help="Speed threshold for GPS-based speed calculations (m/s).\
-            Default 80.",
+            Default 24.",
     )
     parser.add_argument(
         "-sf",

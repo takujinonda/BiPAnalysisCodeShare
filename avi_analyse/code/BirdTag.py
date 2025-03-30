@@ -456,7 +456,7 @@ class BirdTag:
 
     def save_flap_glide(
         self,
-        sp_threshold: float = 80,
+        sp_threshold: float = 24,
     ):
         """Save flapping/gliding and speed information to file.
         Wrapper function to put together analysis of dorsoventral acceleration
@@ -465,7 +465,7 @@ class BirdTag:
         Parameters
         ----------
         sp_threshold
-            Speed threshold (m/s) to remove erroneous values. Default 80.
+            Speed threshold (m/s) to remove erroneous values. Default 24.
         """
         self.flapping()
         self.dist_speed(sp_threshold)

@@ -34,9 +34,9 @@ You need to provide data_url for the url of csv file to read in the pandas read_
 | wind | Estimate wind conditions from GPS records |
 | remove-location | Remove data surrounding a location (i.e. tag site) in lat lon decimal degrees |
 | remove-distance | Distance from removal location within which data will be removed |
-| spthresh | Maximum speed threshold (if exceeded, GPS points are removed and speed recalculated) in m/s. Default 80 |
+| spthresh | Maximum speed threshold (if exceeded, GPS points are removed and speed recalculated) in m/s. Default 24 |
 | saveloc | Path to desired save location. If none passed, outputs saved to current working directory |
 
 ```
-$ python run_analysis.py -url data_url --tag-name tag4_2021 --flap-glide --wind --remove-location 39.400 141.998 --remove-distance 5 --speed-threshold 90 --saveloc /path/to/my/desired/location/
+$ python run_analysis.py -url data_url --tag-name tag4_2021 --flap-glide --wind --remove-location 39.400 141.998 --remove-distance 5 --speed-threshold 22 --saveloc /path/to/my/desired/location/
 ```
