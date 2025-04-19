@@ -167,17 +167,21 @@ def nearestInd(items, pivot):
 def timeRescale(dat, tdiff, units="min"):
     """
     Subset dataframe to reflect desired regular sampling interval. Nearest time
-    values are used, `dat` must have datetime column 'DT' Parameters
+    values are used, `dat` must have datetime column 'DT' 
+    
+    Parameters
     ----------
-
-        dat:            pandas dataframe with datetime column'DT'  correctly
-        formatted tdiff:          desired regular sampling interval units:
+    dat
+        pandas dataframe with datetime column 'DT' correctly formatted.
+    tdiff
+        desired regular sampling interval.
+    units
         units of desired sampling intervals using pandas time/date conventions.
         Defaults to 'T'.
 
     Returns
     -------
-        Pandas dataframe resampled to desired regular sampling interval
+    Pandas dataframe resampled to desired regular sampling interval.
     """
 
     # change indexing to datetime and resample
@@ -254,7 +258,7 @@ def gps_speed(longitudes, latitudes, timestamps):
         np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2.0) ** 2
     )
     dist = np.array(6371 * 2 * np.arcsin(np.sqrt(a)) * 1000)
-    time_array = (timestamps.diff().dt.seconds).values[1:]
+    time_array = (timestamps.diff() / np.timedelta64(1,'s')).values[1:]
 
     # Calculate the speed
     time_array[time_array == 0] = np.nan  # To avoid division by zero
@@ -267,7 +271,7 @@ def gps_speed(longitudes, latitudes, timestamps):
 
 
 def distSpeed(lat, lon, DT, threshold=None):
-    """Sped and distance with max speed threshold.
+    """Speed and distance with max speed threshold.
     Calculates distances (metres) and speed (m/s) of GPS positions and datetime
     information. Uses a speed threshold (default None) to define erroneous GPS
     positions. GPS and datetime lengths must agree.
@@ -759,7 +763,7 @@ def windEstimation(
     try:
         windows, centers = findWindows(dat, cutv, windowLength)
     except:
-        return
+        raise ValueError("No applicable windows found")
 
     # max likelihood calculations for wind estimation
     for win in range(len(windows)):
@@ -959,49 +963,6 @@ def gps_distanceSingle(longitudes, latitudes, latVal, lonVal):
         distance.distance((x, y), (latVal, lonVal)).km
         for x, y in zip(latitudes, longitudes)
     ]
-
-
-def gps_speed(longitudes, latitudes, timestamps):
-    # taken from https://www.tjansson.dk/2021/03/vectorized-gps-distance-speed-calculation-for-pandas/, thanks to Thomas Jansson for use of this function
-    """
-    Calculates the instantaneous speed from the GPS positions and timestamps. The distances between the points
-    are calculated using a vectorized haversine calculation the great circle distance between two arrays of points on
-    the earth (specified in decimal degrees). All args must be of equal length.
-
-    Args:
-        longitudes: pandas series of longitudes.
-        latitudes:  pandas series of latitudes.
-        timestamps: pandas series of timestamps.
-
-    Returns:
-        Speed is returned an array in m/s.
-
-    Example:
-        >>> df['gpsSpeed'] = gps_speed(df.longitude, df.latitude, df.recordedAt).
-    """
-
-    lon1 = longitudes[:-1].reset_index(drop=True)
-    lat1 = latitudes[:-1].reset_index(drop=True)
-    lon2 = longitudes[1:].reset_index(drop=True)
-    lat2 = latitudes[1:].reset_index(drop=True)
-
-    # Vectorized haversine calculation
-    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
-    a = np.sin((lat2 - lat1) / 2.0) ** 2 + (
-        np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2.0) ** 2
-    )
-    dist = np.array(6371 * 2 * np.arcsin(np.sqrt(a)) * 1000)
-    time_array = (timestamps.diff().dt.seconds).values[1:]
-
-    # Calculate the speed
-    time_array[time_array == 0] = np.nan  # To avoid division by zero
-    speed = np.array(dist / time_array)
-
-    # Make the arrays as long as the input arrays
-    speed = np.insert(speed, 0, np.nan, axis=0)
-    dist = np.insert(dist, 0, np.nan, axis=0)
-    return dist, speed
-
 
 def removeNear(acc_data, gps_data, captureSite, distThreshold=1.5):
     """
