@@ -291,11 +291,11 @@ def peak_trough(sig):
         if peaks[-1] > troughs[-1]:
             peaks = np.delete(peaks, -1)
 
-    # create alternative of bool array indicating presence/absence of peaks (1) and troughs (2)
-    flap_sig = np.zeros(len(sig))
-    flap_sig[peaks] = 1
-    flap_sig[troughs] = 3
-    return peaks, troughs, flap_sig
+    # # create alternative of bool array indicating presence/absence of peaks (1) and troughs (2)
+    # flap_sig = np.zeros(len(sig))
+    # flap_sig[peaks] = 1
+    # flap_sig[troughs] = 3
+    return peaks, troughs
 
 
 def interpeaktrough(mags):
@@ -306,7 +306,15 @@ def interpeaktrough(mags):
 
     ppeaks, _ = find_peaks(p)
     pks, _ = find_peaks(-p[ppeaks[0] : ppeaks[1]])
-
+    
+    if len(pks) == 0:
+        p = np.insert(p, 0, -1)
+        ppeaks, _ = find_peaks(p)
+        pks, _ = find_peaks(-p[ppeaks[0] : ppeaks[1]])
+        if len(pks) == 0:
+            raise ValueError("Flapping interpeak trough cannot be found")
+        pks = pks - 1
+        
     return x[pks]
 
 
@@ -317,7 +325,7 @@ def flatten(xss):
 def peak_trough_in_flight(sig, fl_inds):
     """Identify peaks/troughs of signal `sig` within defined flight periods `fl_inds`"""
 
-    peaks, troughs, _ = peak_trough(sig)
+    peaks, troughs = peak_trough(sig)
 
     flpeaks = []
     fltroughs = []
@@ -374,12 +382,12 @@ def flap(sig, fs, bout_gap=30, flap_freq=4, find_in_flight_periods=False, flinds
     if find_in_flight_periods:
         peaks, troughs = peak_trough_in_flight(sig, flinds)
     else:
-        peaks, troughs, _ = peak_trough(sig)
+        peaks, troughs = peak_trough(sig)
     data = np.absolute(sig[peaks].values - sig[troughs].values)
     ipt = interpeaktrough(data)
 
     # if only using estimated flight periods, recalculate peaks and troughs
-    peaks, troughs, _ = peak_trough(sig)
+    peaks, troughs = peak_trough(sig)
     # retain only sufficiently large z displacements
     large_inds = np.absolute(sig[peaks].values - sig[troughs].values) > ipt
     flap_peaks, flap_troughs = peaks[large_inds], troughs[large_inds]
@@ -420,7 +428,7 @@ def flight_est_thresholds(acc, fl_inds):
 def flight_pitch_changes(sig, fl_inds, findVal=None):
     outs = []
     for x in fl_inds:
-        pk, trgh, _ = peak_trough(sig[x])
+        pk, trgh = peak_trough(sig[x])
         pk = x[pk]
         trgh = x[trgh]
         if findVal == "max":
