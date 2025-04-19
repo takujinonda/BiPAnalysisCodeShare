@@ -138,7 +138,7 @@ class BirdTag:
             self.acc, self.gps = read_in.readBiP(self.filepath, cols="acc")
         # derive acceleration sampling frequency if not provided
         if (self.accfs is None) & (hasattr(self, "acc")):
-            self.accfs = np.timedelta64(1, "s") / np.mean(np.diff(self.acc.DT))
+            self.accfs = median(np.timedelta64(1, "s") / self.acc.DT.diff())
 
     def remove_near(self, home_site, dist_threshold=1.5) -> None:
         """Identify and remove data near a specified location.
@@ -490,15 +490,13 @@ class BirdTag:
                 gps_data[key][gps_idx] = self.gps[key]
 
         # combine information into single database
-        flap_glide_out = pd.concat(
-            [
-                self.acc.DT,
-                pd.Series(self.flap),
-                pd.Series(self.flap_bouts),
-                pd.Series(self.glide),
-            ],
-            axis=1,
-            ignore_index=True,
+        flap_glide_out = pd.DataFrame(
+            data = {
+                "DT": self.acc.DT,
+                "flap": pd.Series(self.flap),
+                "flap_bout": pd.Series(self.flap_bouts),
+                "glide": pd.Series(self.glide),
+            },
         )
         flap_glide_out = pd.concat(
             [

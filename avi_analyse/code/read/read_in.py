@@ -217,7 +217,11 @@ def readBiP(filename, cols=None):
             "lat",
             "lon",
         ]
+        # in case of missing acceleration records, remove observations
+        df.dropna(subset=["X","Y","Z"], inplace=True)
+        
         accdf = df[new_acc_cols]
+        accdf.reset_index(inplace=True)
         gpsdf = df[new_gps_cols]
         gpsdf.dropna(inplace=True)
         gpsdf.reset_index(inplace=True)
