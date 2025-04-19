@@ -763,7 +763,7 @@ def windEstimation(
     try:
         windows, centers = findWindows(dat, cutv, windowLength)
     except:
-        raise ValueError("No applicable windows found")
+        raise ValueError("No applicable data windows found for wind estimation.")
 
     # max likelihood calculations for wind estimation
     for win in range(len(windows)):
