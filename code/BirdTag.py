@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import distinctipy
 import numpy as np
 import pandas as pd
+import warnings
 
 # suppress warnings on chained assignment (not relevant here)
 pd.options.mode.chained_assignment = None
@@ -186,14 +187,17 @@ class BirdTag:
 
     def estimate_wind(self) -> None:
         """Wrapper function for wind estimation method."""
-        wind_df = windFn.windEstimation2(self.gps)
-        wind_out_filename = (
-            self.analysis_outloc + "/" + self.tagname + "_wind_estimation.csv"
-        )
-        if self.verbose:
-            print(f"Saving wind results to {wind_out_filename}")
+        try:
+            wind_df = windFn.windEstimation2(self.gps)
+            wind_out_filename = (
+                self.analysis_outloc + "/" + self.tagname + "_wind_estimation.csv"
+            )
+            if self.verbose:
+                print(f"Saving wind results to {wind_out_filename}")
 
-        wind_df.to_csv(Path(wind_out_filename), date_format="%Y-%m-%d %H:%M:%S.%f")
+            wind_df.to_csv(Path(wind_out_filename), date_format="%Y-%m-%d %H:%M:%S.%f")
+        except Exception as e:
+            warnings.warn("Wind analysis unable to find suitable windows.")
 
     @staticmethod
     def round_seconds(obj: dt.datetime) -> dt.datetime:
