@@ -15,7 +15,7 @@ $ DOCKER_DEFAULT_PLATFORM=linux/amd64 docker run --rm -t -i docker.io/library/av
 ## Other than Apple Silicon
 ### build the image
 ```
-$ docker build --no-cache -t avi_analyse avi_analyse/
+$ docker build --no-cache -t avi_analyse .
 ```
 
 ### go inside the built docker image
