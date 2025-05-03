@@ -433,9 +433,12 @@ def findWindows(DF, cutv=4.1667, windowlength=51):
     Parameters
     ----------
 
-        DF:             dataframe of tag recordings as output by prePare() cutv:
-        minimum speed to ensure flight in m/s. Defaults to 4.1667 windowlength:
-        window length duration in minutes. Defaults to 51
+    DF
+        dataframe of tag recordings as output by prePare().
+    cutv:
+        minimum speed to ensure flight in m/s. Defaults to 4.1667.
+    windowlength:
+        window length duration in minutes. Defaults to 51.
 
     Returns
     -------
@@ -447,7 +450,7 @@ def findWindows(DF, cutv=4.1667, windowlength=51):
     fs = (1 / np.abs(np.timedelta64(mode(np.diff(DF.DT)), "m")).astype(int)).astype(
         int
     )  # in fixes per minute
-    expSamp = round(51 * fs)  # expected number of samples
+    expSamp = round(windowlength * fs)  # expected number of samples
     cutlength = round(45 / 51 * expSamp)
     error_of_sampling_interval = (
         5 * fs
@@ -467,8 +470,8 @@ def findWindows(DF, cutv=4.1667, windowlength=51):
             ],
         )
     )
-    return windows, centers
 
+    return windows, centers
 
 def initPars(head, spd, hed, cv=34.7 / 3.6):
     """Generate initial parameters for log-likelihood testing
@@ -762,8 +765,9 @@ def windEstimation(
     # generate windows over which estimation method will be run
     try:
         windows, centers = findWindows(dat, cutv, windowLength)
-    except:
-        raise ValueError("No applicable data windows found for wind estimation.")
+    except Exception as e:
+        if "ValueError: not enough values to unpack" in e:
+            raise ValueError("No applicable data windows found for wind estimation.")
 
     # max likelihood calculations for wind estimation
     for win in range(len(windows)):
@@ -914,7 +918,11 @@ def windEstimation2(
 
     if len(dat) > 1:
         # generate windows over which estimation method will be run
-        windows, centers = findWindows(dat, cutv, windowLength)
+        try:
+            windows, centers = findWindows(dat, cutv, windowLength)
+        except Exception as e:
+            if "ValueError: not enough values to unpack" in e:
+                raise ValueError("No applicable data windows found for wind estimation.")
 
         # max likelihood calculations for wind estimation
         for win in range(len(windows)):
