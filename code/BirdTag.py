@@ -163,11 +163,11 @@ class BirdTag:
 
         # remove acceleration data
         self.acc.drop(acc_inds, inplace=True)
-        self.acc.reset_index(inplace=True)
+        self.acc.reset_index(inplace=True,names=["remove_near_ii"])
         # repeat for GPS data
         self.gps.drop(set(acc_inds).intersection(set(self.gps.index)), inplace=True)
         self.gps.reset_index(
-            inplace=True, drop=True
+            inplace=True, drop=True,names=["remove_near_ii"]
         )  # gps data already has an index reference
 
     def dist_speed(self, threshold=None) -> None:
@@ -474,40 +474,21 @@ class BirdTag:
         self.flapping()
         self.dist_speed(sp_threshold)
 
-        # create GPS series of same length as acceleration
-        if "index" in self.acc.columns:
-            acc_idx = self.acc["index"]
-            gps_idx = self.gps["index"]
-        else:
-            acc_idx = self.acc.index
-            gps_idx = self.gps.index
-        dummy_series = pd.Series(np.nan, acc_idx)
-        gps_data = {
-            "lat": dummy_series.copy(),
-            "lon": dummy_series.copy(),
-            "speed": dummy_series.copy(),
-        }
-        for key in gps_data.keys():
-            if key == "speed":
-                gps_data[key][gps_idx] = self.speed
-            else:
-                gps_data[key][gps_idx] = self.gps[key]
+        # revert back to original indexing
+        out_acc = self.acc.set_index('readin_rem')
+        out_gps = self.gps.set_index('readin_rem')
 
-        # combine information into single database
+        # bring everything together into a single dataframe
         flap_glide_out = pd.DataFrame(
             data = {
-                "DT": self.acc.DT,
-                "flap": pd.Series(self.flap),
-                "flap_bout": pd.Series(self.flap_bouts),
-                "glide": pd.Series(self.glide),
+                "DT": out_acc.DT,
+                "flap": pd.Series(self.flap,self.acc['readin_rem']),
+                "flap_bout": pd.Series(self.flap_bouts,self.acc['readin_rem']),
+                "glide": pd.Series(self.glide,self.acc['readin_rem']),
+                "lat": out_gps["lat"],
+                "lon": out_gps["lon"],
+                "speed": pd.Series(self.speed,self.gps['readin_rem'])
             },
-        )
-        flap_glide_out = pd.concat(
-            [
-                flap_glide_out,
-                pd.DataFrame(data=gps_data).set_index(flap_glide_out.index),
-            ],
-            axis=1,
         )
 
         # create filename and save
