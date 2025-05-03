@@ -47,7 +47,7 @@ def readAxy(
     filename,
     delim="\t",
     cols=None,
-    datetimeFormat="%d/%m/%Y %H:%M:%S.%f",
+    datetimeFormat="%Y/%m/%d %H:%M:%S.%f",
 ):
     """
     Read in AxyTrek GPS data (txt files) as output by X Manager
