@@ -221,10 +221,10 @@ def readBiP(filename, cols=None):
         df.dropna(subset=["X","Y","Z"], inplace=True)
         
         accdf = df[new_acc_cols]
-        accdf.reset_index(inplace=True)
+        accdf.reset_index(inplace=True,names=["readin_rem"])
         gpsdf = df[new_gps_cols]
         gpsdf.dropna(inplace=True)
-        gpsdf.reset_index(inplace=True)
+        gpsdf.reset_index(inplace=True,names=["readin_rem"])
 
         return accdf, gpsdf
 
