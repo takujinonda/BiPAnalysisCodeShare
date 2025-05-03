@@ -14,16 +14,17 @@ def parse_arguments():
         "-url",
         "--data-url",
         type=str,
+        nargs="+",
         required=True,
-        help="URL of the data to be analysed.",
+        help="URL(s) of the data to be analysed.",
     )
     parser.add_argument(
         "-tname",
         "--tag-name",
         type=str,
-        default=None,
-        help="Name of tag (used in generating output file names). \
-            Defaults to the base file name.",
+        nargs="+",
+        required=True,
+        help="Name of tag(s) (used in generating output file names).",
     )
     # parser.add_argument(
     #     "-f",
@@ -92,7 +93,6 @@ def parse_arguments():
     args = parser.parse_args()
     return args
 
-
 def main():
     """Wrapper for full BirdTag functionality.
     Based on CLI arguments, various analyses will be performed with desired
@@ -100,38 +100,48 @@ def main():
     """
     args = parse_arguments()
 
-    # init birdTag object
-    tag = BirdTag(
-        filepath=args.data_url,
-        tag_type="bip",
-        tagname=args.tag_name,
-        analysis_outloc=args.saveloc,
-        verbose=args.verbose,
-    )
+    # check if enough tag names provided
+    if len(args.data_url) != len(args.tag_name):
+        raise ValueError("Number of tag names does not match input URLs")
 
-    # read in the relevant data
-    if (args.wind) * (not args.flap_glide):
-        tag.readin(wind=True)
-    else:
-        tag.readin(wind=False)
+    # check if all tag names are unique
+    if len(args.tag_name) != len(set(args.tag_name)):
+        raise ValueError("WARNING: not all tag names are unique. This will overwrite output files")
 
-    # perform the wind analysis if requested
-    if args.wind:
-        if args.verbose:
-            print("Running wind analysis...")
-        seterr(invalid="ignore", over="ignore")  # temporary error suppression
-        tag.estimate_wind()
+    # read in and run requested analysis
+    for tpath, tname in zip(args.data_url, args.tag_name):
+        # init birdTag object
+        tag = BirdTag(
+            filepath=tpath,
+            tag_type="bip",
+            tagname=tname,
+            analysis_outloc=args.saveloc,
+            verbose=args.verbose,
+        )
 
-    # calculate flap/glide if requested
-    if args.flap_glide:
-        # remove data near position if requested
-        if args.remove_location:
+        # read in the relevant data
+        if (args.wind) * (not args.flap_glide):
+            tag.readin(wind=True)
+        else:
+            tag.readin(wind=False)
+
+        # perform the wind analysis if requested
+        if args.wind:
             if args.verbose:
-                print(f"Removing points {args.rem_dist} km from {args.remove_location}...")
-            tag.remove_near(args.remove_location, args.remove_distance)
-        if args.verbose:
-            print("Running flap/glide analysis...")
-        tag.save_flap_glide()
+                print(f"Running wind analysis for {tname}...")
+            seterr(invalid="ignore", over="ignore")  # temporary error suppression
+            tag.estimate_wind()
+
+        # calculate flap/glide if requested
+        if args.flap_glide:
+            # remove data near position if requested
+            if args.remove_location:
+                if args.verbose:
+                    print(f"Removing points {args.remove_distance} km from {args.remove_location}...")
+                tag.remove_near(args.remove_location, args.remove_distance)
+            if args.verbose:
+                print(f"Running flap/glide analysis for {tname}...")
+            tag.save_flap_glide()
 
 
 if __name__ == "__main__":
