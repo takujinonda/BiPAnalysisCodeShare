@@ -312,7 +312,7 @@ def interpeaktrough(mags):
         ppeaks, _ = find_peaks(p)
         pks, _ = find_peaks(-p[ppeaks[0] : ppeaks[1]])
         if len(pks) == 0:
-            raise ValueError("Flapping interpeak trough cannot be found")
+            raise ValueError("Flapping interpeak trough cannot be determined")
         pks = pks - 1
         
     return x[pks]
@@ -384,7 +384,22 @@ def flap(sig, fs, bout_gap=30, flap_freq=4, find_in_flight_periods=False, flinds
     else:
         peaks, troughs = peak_trough(sig)
     data = np.absolute(sig[peaks].values - sig[troughs].values)
-    ipt = interpeaktrough(data)
+    try:
+        ipt = interpeaktrough(data)
+    except Exception as e:
+        if "Flapping interpeak trough cannot be determined" in str(e):
+            print("Attempting flapping detection with subsampling")
+            to_rescale = fs // 50
+            # create a subsampling index array
+            subsample_ii = np.arange(
+                sig.index.min(),
+                sig.index.max(),
+                to_rescale,
+            ).astype(int)
+            subsamp_sig = sig[subsample_ii].reset_index(drop=True)
+            peaks, troughs = peak_trough(subsamp_sig)
+            data = np.absolute(subsamp_sig[peaks].values - subsamp_sig[troughs].values)
+            ipt = interpeaktrough(data)
 
     # if only using estimated flight periods, recalculate peaks and troughs
     peaks, troughs = peak_trough(sig)
