@@ -688,7 +688,11 @@ class BirdTag:
             projection=projection,
         )
 
-    def test_det_beh_agreement(self, only_forage: bool = False):
+    def test_det_beh_agreement(
+        self,
+        only_forage: bool = False,
+        plot_confusion_matrix: bool = False,
+        ):
         # convert all foraging into 'Forage' and all flight into 'FL'
         self.upsampled_beh["beh_simple"] = self.upsampled_beh.Behaviour
         # simplify foraging
@@ -721,7 +725,38 @@ class BirdTag:
             )
             / sum((self.EthBeh[not_AT] == "Forage")).item()
         )
+        
+        true_negative_forage_sample_rate = (
+            sum(
+                (self.EthBeh[not_AT] != "Forage")
+                * (self.upsampled_beh.beh_simple[not_AT] != "Forage")
+            )
+            / sum((self.EthBeh[not_AT] != "Forage")).item()
+        )
 
+        false_negative_forage_sample_rate = (
+            sum(
+                (self.EthBeh[not_AT] != "Forage")
+                * (self.upsampled_beh.beh_simple[not_AT] == "Forage")
+            )
+            / sum((self.EthBeh[not_AT] != "Forage")).item()
+        )
+
+        if plot_confusion_matrix:
+            fig, ax = plt.subplots(figsize=(8,6))
+            ax.matshow(
+                [
+                    [
+                        true_positive_forage_sample_rate,
+                        false_positive_forage_sample_rate,
+                    ],
+                    {
+                        true_negative_forage_sample_rate,
+                        false_negative_forage_sample_rate,
+                    }
+                ],
+                cmap = "greys",
+            )
         # how many predicted forages have known foraging in them
         pred_chg_idx, pred_chg_str = self.get_changes_in_string_list(
             self.upsampled_beh.beh_simple
